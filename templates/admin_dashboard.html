@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Admin Dashboard - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<header class="site-header">
+
+    <div class="header-container">
+
+        <h1>My Blog Admin</h1>
+
+        <nav>
+
+            <a href="/">
+                Home
+            </a>
+
+            <a href="/admin">
+                Dashboard
+            </a>
+
+            <a href="/create-post">
+                Create Post
+            </a>
+
+            <a href="/admin/comments">
+                Manage Comments
+            </a>
+
+            <a href="/logout">
+                Logout
+            </a>
+
+        </nav>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <h2>
+        Admin Dashboard
+    </h2>
+    
+    <div class="stats-grid">
+
+    <div class="stat-card">
+
+        <h3>👥 Users</h3>
+
+        <p>
+            {{ total_users }}
+        </p>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <h3>📝 Posts</h3>
+
+        <p>
+            {{ total_posts }}
+        </p>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <h3>💬 Comments</h3>
+
+        <p>
+            {{ total_comments }}
+        </p>
+
+    </div>
+
+
+    <div class="stat-card">
+
+        <h3>👍 Likes</h3>
+
+        <p>
+            {{ total_likes }}
+        </p>
+
+    </div>
+
+</div>
+
+
+    <div class="admin-actions">
+
+        <a href="/create-post">
+            ➕ Create New Post
+        </a>
+
+        <a href="/admin/comments">
+            💬 Manage Comments
+        </a>
+
+    </div>
+
+
+    <h2>
+        Posts
+    </h2>
+
+
+    {% if posts %}
+    
+    
+
+        {% for post in posts %}
+
+            <article class="post-card">
+
+                <h3>
+                    {{ post["title"] }}
+                </h3>
+
+                <p>
+
+                    <strong>
+                        Author:
+                    </strong>
+
+                    {{ post["author"] }}
+
+                </p>
+
+                <p>
+
+                    <strong>
+                        Category:
+                    </strong>
+
+                    {{ post["category"] }}
+
+                </p>
+                
+                
+                    {% if post["featured"] == 1 %}
+
+    <a href="{{ url_for(
+        'unfeature_post',
+        post_id=post['id']
+    ) }}">
+        ⭐ Remove Featured
+    </a>
+
+{% else %}
+
+    <a href="{{ url_for(
+        'feature_post',
+        post_id=post['id']
+    ) }}">
+        ⭐ Make Featured
+    </a>
+
+{% endif %}
+
+
+
+                <p>
+
+                    {{ post["content"][:200] }}
+
+                    {% if post["content"]|length > 200 %}
+                        ...
+                    {% endif %}
+
+                </p>
+
+
+                <a
+                    href="{{ url_for(
+                        'post',
+                        post_id=post['id']
+                    ) }}"
+                >
+
+                    View
+
+                </a>
+
+
+                |
+
+                <a
+                    href="{{ url_for(
+                        'edit_post',
+                        post_id=post['id']
+                    ) }}"
+                >
+
+                    Edit
+
+                </a>
+
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'delete_post',
+                        post_id=post['id']
+                    ) }}"
+                    style="display:inline;"
+                >
+
+                    <button
+                        type="submit"
+                        onclick="return confirm(
+                            'Delete this post?'
+                        )"
+                    >
+
+                        Delete
+
+                    </button>
+
+                </form>
+
+            </article>
+
+        {% endfor %}
+
+    {% else %}
+
+        <p>
+            No posts yet.
+        </p>
+
+    {% endif %}
+
+
+    <hr>
+
+
+    <h2>
+        Registered Users
+    </h2>
+
+
+    {% if users %}
+
+        <div class="users-list">
+
+            {% for user in users %}
+
+                <div class="user-card">
+
+                    <strong>
+                        {{ user["username"] }}
+                    </strong>
+
+                    <br>
+
+                    {{ user["email"] }}
+
+                    <br>
+
+                    {% if user["is_admin"] == 1 %}
+
+                        <span>
+                            🔐 Administrator
+                        </span>
+
+                    {% else %}
+
+                        <span>
+                            👤 Visitor
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <p>
+            No users found.
+        </p>
+
+    {% endif %}
+
+</main>
+
+
+<footer>
+
+    <p>
+        © 2026 My Blog. All rights reserved.
+    </p>
+
+</footer>
+
+</body>
+
+</html>

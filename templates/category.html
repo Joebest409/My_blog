@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>{{ category }} - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<header class="site-header">
+
+    <div class="header-container">
+
+        <h1>My Blog</h1>
+
+        <nav>
+
+            <a href="/">Home</a>
+
+            {% if session.get("user_id") %}
+
+                <span>
+                    Welcome, {{ session.get("username") }}
+                </span>
+
+                <a href="/logout">Logout</a>
+
+            {% else %}
+
+                <a href="/login">Login</a>
+                <a href="/register">Register</a>
+
+            {% endif %}
+
+            {% if session.get("is_admin") == 1 %}
+
+                <a href="/admin">
+                    Admin Dashboard
+                </a>
+
+            {% endif %}
+
+        </nav>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <h2>
+        {{ category }} Posts
+    </h2>
+
+
+    {% if posts %}
+
+        <div class="posts-grid">
+
+            {% for post in posts %}
+
+                <article class="post-card">
+
+                    <h3>
+                        {{ post["title"] }}
+                    </h3>
+
+                    <p class="post-meta">
+
+                        By {{ post["author"] }}
+
+                        • {{ post["created_at"] }}
+
+                    </p>
+
+                    <p>
+
+                        {{ post["content"][:200] }}...
+
+                    </p>
+
+                    <a
+                        class="read-more"
+                        href="{{ url_for(
+                            'post',
+                            post_id=post['id']
+                        ) }}"
+                    >
+
+                        Read More →
+
+                    </a>
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="empty">
+
+            <h3>No posts in this category</h3>
+
+            <p>
+                There are currently no
+                {{ category }} posts.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</main>
+
+
+<footer>
+
+    <p>
+        © 2026 My Blog. All rights reserved.
+    </p>
+
+</footer>
+
+</body>
+
+</html>

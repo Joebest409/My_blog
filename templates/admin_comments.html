@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Manage Comments - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<header class="site-header">
+
+    <div class="header-container">
+
+        <h1>My Blog Admin</h1>
+
+        <nav>
+
+            <a href="/">Home</a>
+
+            <a href="/admin">Dashboard</a>
+
+            <a href="/logout">Logout</a>
+
+        </nav>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <h2>Manage Comments</h2>
+
+
+    {% if comments %}
+
+        {% for comment in comments %}
+
+            <div class="comment">
+
+                <h3>
+                    {{ comment["username"] }}
+                </h3>
+
+                <p>
+                    <strong>Post:</strong>
+
+                    <a href="{{ url_for(
+                        'post',
+                        post_id=comment['post_id']
+                    ) }}">
+
+                        {{ comment["title"] }}
+
+                    </a>
+                </p>
+
+                <p>
+                    {{ comment["content"] }}
+                </p>
+
+                <small>
+                    {{ comment["created_at"] }}
+                </small>
+
+
+                <form
+                    method="POST"
+                    action="{{ url_for(
+                        'delete_comment',
+                        comment_id=comment['id']
+                    ) }}"
+                >
+
+                    <button
+                        type="submit"
+                        onclick="return confirm(
+                            'Delete this comment?'
+                        )"
+                    >
+
+                        Delete Comment
+
+                    </button>
+
+                </form>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="empty">
+
+            <h3>No comments</h3>
+
+            <p>
+                There are currently no comments.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</main>
+
+
+<footer>
+
+    <p>
+        © 2026 My Blog. All rights reserved.
+    </p>
+
+</footer>
+
+</body>
+
+</html>

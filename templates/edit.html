@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Edit Post - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<header>
+
+    <h1>My Blog</h1>
+
+    <nav>
+        <a href="/">Home</a>
+    </nav>
+
+</header>
+
+
+<main>
+
+    <h2>Edit Post</h2>
+
+    <form method="POST">
+
+        <label>Post Title</label>
+
+        <input
+            type="text"
+            name="title"
+            value="{{ post['title'] }}"
+            required
+        >
+
+
+        <label>Author</label>
+
+        <input
+            type="text"
+            name="author"
+            value="{{ post['author'] }}"
+            required
+        >
+        
+        <label>Category</label>
+
+<select name="category" required>
+
+    <option value="General"
+        {% if post["category"] == "General" %}selected{% endif %}>
+        General
+    </option>
+
+    <option value="Technology"
+        {% if post["category"] == "Technology" %}selected{% endif %}>
+        Technology
+    </option>
+
+    <option value="Education"
+        {% if post["category"] == "Education" %}selected{% endif %}>
+        Education
+    </option>
+
+    <option value="Business"
+        {% if post["category"] == "Business" %}selected{% endif %}>
+        Business
+    </option>
+
+    <option value="Health"
+        {% if post["category"] == "Health" %}selected{% endif %}>
+        Health
+    </option>
+
+    <option value="News"
+        {% if post["category"] == "News" %}selected{% endif %}>
+        News
+    </option>
+
+    <option value="Lifestyle"
+        {% if post["category"] == "Lifestyle" %}selected{% endif %}>
+        Lifestyle
+    </option>
+
+</select>
+
+
+        <label>Content</label>
+
+        <textarea
+            name="content"
+            rows="12"
+            required
+        >{{ post['content'] }}</textarea>
+
+
+        <button type="submit">
+            Update Post
+        </button>
+
+    </form>
+
+</main>
+
+</body>
+
+</html>

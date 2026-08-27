@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Create Post - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<header>
+
+    <h1>My Blog</h1>
+
+    <nav>
+        <a href="/">Home</a>
+    </nav>
+
+</header>
+
+
+<main>
+
+    <h2>Create New Post</h2>
+
+    <form method="POST" enctype="multipart/form-data">
+
+        <label>Post Title</label>
+
+        <input
+            type="text"
+            name="title"
+            placeholder="Enter post title"
+            required
+        >
+
+
+        <label>Author</label>
+
+        <input
+            type="text"
+            name="author"
+            placeholder="Your name"
+            required
+        >
+        
+        
+        <label>Category</label>
+
+<select name="category" required>
+
+    <option value="General">General</option>
+    <option value="Technology">Technology</option>
+    <option value="Education">Education</option>
+    <option value="Business">Business</option>
+    <option value="Health">Health</option>
+    <option value="News">News</option>
+    <option value="Lifestyle">Lifestyle</option>
+
+</select>
+
+
+        <label>Content</label>
+
+        <textarea
+            name="content"
+            rows="10"
+            placeholder="Write your article..."
+            required
+        ></textarea>
+        
+        <label for="image">
+    Featured Image
+</label>
+
+<input
+    type="file"
+    id="image"
+    name="image"
+    accept="image/png,image/jpeg,image/gif,image/webp"
+>
+
+
+        <button type="submit">
+            Publish Post
+        </button>
+
+    </form>
+
+</main>
+
+</body>
+
+</html>

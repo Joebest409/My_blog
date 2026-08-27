@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>Create Admin - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<header>
+
+    <h1>My Blog</h1>
+
+</header>
+
+<main>
+
+    <h2>Create Admin Account</h2>
+
+    <p>
+        This account will have full administrative access.
+    </p>
+
+    <form method="POST">
+
+        <label>Admin Username</label>
+
+        <input
+            type="text"
+            name="username"
+            required
+        >
+
+        <label>Admin Email</label>
+
+        <input
+            type="email"
+            name="email"
+            required
+        >
+
+        <label>Admin Password</label>
+
+        <input
+            type="password"
+            name="password"
+            required
+        >
+
+        <button type="submit">
+            Create Admin
+        </button>
+
+    </form>
+
+</main>
+
+</body>
+
+</html>

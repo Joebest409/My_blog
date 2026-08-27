@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+
+<body>
+
+
+<header class="site-header">
+
+    <div class="header-container">
+
+        <h1>My Blog</h1>
+
+        <nav>
+
+            <a href="/">Home</a>
+
+            {% if session.get("user_id") %}
+
+                <span>
+                    Welcome, {{ session.get("username") }}
+                </span>
+                
+                {% if session.get("user_id") %}
+
+    <span>
+        Welcome, {{ session.get("username") }}
+    </span>
+
+    <a href="/profile">
+        My Profile
+    </a>
+
+    <a href="/logout">
+        Logout
+    </a>
+
+{% else %}
+
+    <a href="/login">
+        Login
+    </a>
+
+    <a href="/register">
+        Register
+    </a>
+
+{% endif %}
+
+                <a href="/logout">Logout</a>
+
+            {% else %}
+
+                <a href="/login">Login</a>
+
+                <a href="/register">Register</a>
+
+            {% endif %}
+
+
+            {% if session.get("is_admin") == 1 %}
+
+                <a href="/admin">
+                    Admin Dashboard
+                </a>
+
+            {% endif %}
+
+        </nav>
+
+    </div>
+
+</header>
+
+
+<section class="hero">
+
+    <h2>Welcome to My Blog</h2>
+
+    <p>
+        Discover articles, ideas, stories and useful information.
+    </p>
+
+</section>
+
+
+<form action="/search" method="GET" class="search-form">
+
+    <input
+        type="text"
+        name="q"
+        placeholder="Search articles..."
+        required
+    >
+
+    <button type="submit">
+        Search
+    </button>
+
+</form>
+
+
+<div class="categories">
+
+    <h3>Categories</h3>
+
+    <a href="/category/Technology">
+        Technology
+    </a>
+
+    <a href="/category/Education">
+        Education
+    </a>
+
+    <a href="/category/Business">
+        Business
+    </a>
+
+    <a href="/category/Health">
+        Health
+    </a>
+
+    <a href="/category/News">
+        News
+    </a>
+
+    <a href="/category/Lifestyle">
+        Lifestyle
+    </a>
+
+</div>
+
+{% if featured_posts %}
+
+    <section class="featured-section">
+
+        <h2>⭐ Featured Posts</h2>
+
+        <div class="featured-posts">
+
+            {% for post in featured_posts %}
+
+                <article class="featured-card">
+
+                    {% if post["image"] %}
+
+                        <img
+                            src="{{ url_for(
+                                'uploaded_file',
+                                filename=post['image']
+                            ) }}"
+                            alt="{{ post['title'] }}"
+                            class="post-thumbnail"
+                        >
+
+                    {% endif %}
+
+                    <h3>
+                        {{ post["title"] }}
+                    </h3>
+
+                    <p>
+                        {{ post["content"][:150] }}
+                        {% if post["content"]|length > 150 %}
+                            ...
+                        {% endif %}
+                    </p>
+
+                    <a href="{{ url_for(
+                        'post',
+                        post_id=post['id']
+                    ) }}">
+                        Read Article →
+                    </a>
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+    </section>
+
+{% endif %}
+
+
+<main class="container">
+
+    <h2>Latest Posts</h2>
+
+
+    {% if posts %}
+
+        <div class="posts-grid">
+
+            {% for post in posts %}
+
+                <article class="post-card">
+                    
+                    {% if post["image"] %}
+
+    <img
+        src="{{ url_for(
+            'uploaded_file',
+            filename=post['image']
+        ) }}"
+        alt="{{ post['title'] }}"
+        class="post-thumbnail"
+    >
+
+{% endif %}
+
+                    <div class="post-content">
+
+                        <h3>
+                            {{ post["title"] }}
+                        </h3>
+
+                        <p class="post-meta">
+
+    By {{ post["author"] }}
+
+    • {{ post["created_at"] }}
+
+</p>
+
+<p>
+    <strong>Category:</strong>
+    {{ post["category"] }}
+</p>
+
+
+                        <p>
+
+                            {{ post["content"][:200] }}...
+
+                        </p>
+
+
+                        <a class="read-more"
+                           href="{{ url_for('post', post_id=post['id']) }}">
+
+                            Read More →
+
+                        </a>
+
+                    </div>
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <div class="empty">
+
+            <h3>No posts yet</h3>
+
+            <p>
+                Check back later for new articles.
+            </p>
+
+            {% if session.get("is_admin") == 1 %}
+
+                <a href="/create-post">
+                    Create Your First Post
+                </a>
+
+            {% endif %}
+
+        </div>
+
+    {% endif %}
+    
+    {% if total_pages > 1 %}
+
+<div class="pagination">
+
+    {% if page > 1 %}
+
+        <a href="{{ url_for(
+            'home',
+            page=page-1
+        ) }}">
+            ← Previous
+        </a>
+
+    {% endif %}
+
+
+    {% for page_number in range(1, total_pages + 1) %}
+
+        {% if page_number == page %}
+
+            <strong>
+                {{ page_number }}
+            </strong>
+
+        {% else %}
+
+            <a href="{{ url_for(
+                'home',
+                page=page_number
+            ) }}">
+                {{ page_number }}
+            </a>
+
+        {% endif %}
+
+    {% endfor %}
+
+
+    {% if page < total_pages %}
+
+        <a href="{{ url_for(
+            'home',
+            page=page+1
+        ) }}">
+            Next →
+        </a>
+
+    {% endif %}
+
+</div>
+
+{% endif %}
+
+</main>
+
+
+<footer>
+
+    <p>
+        © 2026 My Blog. All rights reserved.
+    </p>
+
+</footer>
+
+
+</body>
+
+</html>

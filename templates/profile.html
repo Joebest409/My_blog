@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>My Profile - My Blog</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<header class="site-header">
+
+    <div class="header-container">
+
+        <h1>My Blog</h1>
+
+        <nav>
+
+            <a href="/">
+                Home
+            </a>
+
+            <a href="/profile">
+                My Profile
+            </a>
+
+            {% if session.get("is_admin") == 1 %}
+
+                <a href="/admin">
+                    Admin Dashboard
+                </a>
+
+            {% endif %}
+
+            <a href="/logout">
+                Logout
+            </a>
+
+        </nav>
+
+    </div>
+
+</header>
+
+
+<main class="container">
+
+    <h2>
+        My Profile
+    </h2>
+
+
+    <div class="profile-card">
+
+        <h3>
+            {{ user["username"] }}
+        </h3>
+
+        <p>
+
+            <strong>
+                Email:
+            </strong>
+
+            {{ user["email"] }}
+
+        </p>
+
+
+        <p>
+
+            <strong>
+                Member since:
+            </strong>
+            
+            
+
+            {{ user["created_at"] }}
+
+        </p>
+        
+        <a href="/edit-profile">
+    ✏️ Edit Profile
+</a>
+
+    </div>
+
+
+    <h2>
+        My Comments
+    </h2>
+
+
+    {% if comments %}
+
+        {% for comment in comments %}
+
+            <div class="comment">
+
+                <h3>
+
+                    <a href="{{ url_for(
+                        'post',
+                        post_id=comment['post_id']
+                    ) }}">
+
+                        {{ comment["title"] }}
+
+                    </a>
+
+                </h3>
+
+
+                <p>
+                    {{ comment["content"] }}
+                </p>
+
+
+                <small>
+                    {{ comment["created_at"] }}
+                </small>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <p>
+            You haven't commented on any posts yet.
+        </p>
+
+    {% endif %}
+
+</main>
+
+
+<footer>
+
+    <p>
+        © 2026 My Blog. All rights reserved.
+    </p>
+
+</footer>
+
+</body>
+
+</html>
