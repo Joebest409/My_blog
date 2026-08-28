@@ -55,9 +55,7 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
-
 def init_db():
-
     conn = get_db()
 
     # POSTS TABLE
@@ -83,7 +81,20 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
+    # CREATE DEFAULT ADMIN
+    conn.execute("""
+        INSERT OR IGNORE INTO users
+        (username, email, password, is_admin)
+        VALUES (?, ?, ?, ?)
+    """, (
+        "admin",
+        "admin@example.com",
+        generate_password_hash("admin123"),
+        1
+    ))
+
+    # COMMENTS TABLE
     conn.execute("""
         CREATE TABLE IF NOT EXISTS comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,49 +106,86 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
-    
-    
+
+    # COMMENT LIKES TABLE
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS likes (
+        CREATE TABLE IF NOT EXISTS comment_likes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
+            comment_id INTEGER NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(post_id, user_id),
-            FOREIGN KEY (post_id) REFERENCES posts(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            UNIQUE(user_id, comment_id)
         )
     """)
-    
-    
+
+    conn.commit()
+    conn.close()
+
+
+def add_missing_columns():
+
+    conn = get_db()
+
+    # USERS
+    try:
+        conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN is_admin INTEGER DEFAULT 0
+        """)
+    except sqlite3.OperationalError:
+        pass
+
+    # POSTS CATEGORY
+    try:
+        conn.execute("""
+            ALTER TABLE posts
+            ADD COLUMN category TEXT DEFAULT 'General'
+        """)
+    except sqlite3.OperationalError:
+        pass
+
+    # POSTS IMAGE
     try:
         conn.execute("""
             ALTER TABLE posts
             ADD COLUMN image TEXT
         """)
-        conn.commit()
-
     except sqlite3.OperationalError:
         pass
-    
+
+    # POSTS FEATURED
     try:
         conn.execute("""
             ALTER TABLE posts
             ADD COLUMN featured INTEGER DEFAULT 0
         """)
-        conn.commit()
-
     except sqlite3.OperationalError:
         pass
-    
-    
+
+    # POSTS VIEWS
     try:
         conn.execute("""
             ALTER TABLE posts
             ADD COLUMN views INTEGER DEFAULT 0
         """)
-        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
+    # COMMENTS USERNAME
+    try:
+        conn.execute("""
+            ALTER TABLE comments
+            ADD COLUMN username TEXT DEFAULT 'Anonymous'
+        """)
+    except sqlite3.OperationalError:
+        pass
+
+    # COMMENTS PARENT ID
+    try:
+        conn.execute("""
+            ALTER TABLE comments
+            ADD COLUMN parent_id INTEGER DEFAULT NULL
+        """)
     except sqlite3.OperationalError:
         pass
 
