@@ -1203,10 +1203,10 @@ def unfeature_post(post_id):
 # START APPLICATION
 # =========================
 
+# Initialize database when the application starts
+init_db()
+add_missing_columns()
+
+
 if __name__ == "__main__":
-
-    init_db()
-
-    add_missing_columns()
-
     app.run(debug=True)
