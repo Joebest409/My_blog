@@ -1,95 +1,172 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
     <title>Create Post - My Blog</title>
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f4f4;
+        }
+
+        header {
+            background: #222;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 700px;
+            margin: 40px auto;
+        }
+
+        .form-box {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            min-height: 250px;
+            resize: vertical;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 12px 20px;
+            background: #222;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        .back {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            color: #222;
+        }
+
+    </style>
+
 </head>
+
 
 <body>
 
 <header>
 
-    <h1>My Blog</h1>
+    <h1>Create New Post</h1>
 
-    <nav>
-        <a href="/">Home</a>
-    </nav>
+    <p>Write and publish your article</p>
 
 </header>
 
 
-<main>
+<div class="container">
 
-    <h2>Create New Post</h2>
+    <div class="form-box">
 
-    <form method="POST" enctype="multipart/form-data">
-
-        <label>Post Title</label>
-
-        <input
-            type="text"
-            name="title"
-            placeholder="Enter post title"
-            required
-        >
-
-
-        <label>Author</label>
-
-        <input
-            type="text"
-            name="author"
-            placeholder="Your name"
-            required
-        >
-        
-        
-        <label>Category</label>
+        <form method="POST">
+            
+            <label>Category</label>
 
 <select name="category" required>
 
-    <option value="General">General</option>
-    <option value="Technology">Technology</option>
-    <option value="Education">Education</option>
-    <option value="Business">Business</option>
-    <option value="Health">Health</option>
-    <option value="News">News</option>
-    <option value="Lifestyle">Lifestyle</option>
+    {% for category in categories %}
+
+        <option value="{{ category }}">
+            {{ category }}
+        </option>
+
+    {% endfor %}
 
 </select>
 
+            <label for="title">
+                Post Title
+            </label>
 
-        <label>Content</label>
-
-        <textarea
-            name="content"
-            rows="10"
-            placeholder="Write your article..."
-            required
-        ></textarea>
-        
-        <label for="image">
-    Featured Image
-</label>
-
-<input
-    type="file"
-    id="image"
-    name="image"
-    accept="image/png,image/jpeg,image/gif,image/webp"
->
+            <input
+                type="text"
+                id="title"
+                name="title"
+                placeholder="Enter post title"
+                required
+            >
 
 
-        <button type="submit">
-            Publish Post
-        </button>
+            <label for="author">
+                Author
+            </label>
 
-    </form>
+            <input
+                type="text"
+                id="author"
+                name="author"
+                placeholder="Enter author name"
+                required
+            >
 
-</main>
+
+            <label for="content">
+                Post Content
+            </label>
+
+            <textarea
+                id="content"
+                name="content"
+                placeholder="Write your article here..."
+                required
+            ></textarea>
+
+
+            <button type="submit">
+                Publish Post
+            </button>
+
+        </form>
+
+
+        <a href="/" class="back">
+            ← Back to Home
+        </a>
+
+    </div>
+
+</div>
 
 </body>
 
