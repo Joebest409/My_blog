@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Notifications - My Blog{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+    <h1>🔔 Notifications</h1>
+
+    {% if notifications %}
+
+        {% for notification in notifications %}
+
+            <div class="post">
+
+                <p>
+                    {% if not notification["is_read"] %}
+                        <strong>
+                            🔵
+                        </strong>
+                    {% endif %}
+
+                    {{ notification["message"] }}
+                </p>
+
+                <small>
+                    📅 {{ notification["created_at"] }}
+                </small>
+
+                {% if not notification["is_read"] %}
+
+                    <form
+                        method="POST"
+                        action="{{ url_for(
+                            'mark_notification_read',
+                            notification_id=notification['id']
+                        ) }}"
+                    >
+
+                        <button type="submit">
+                            Mark as Read
+                        </button>
+
+                    </form>
+
+                {% else %}
+
+                    <p>
+                        ✓ Read
+                    </p>
+
+                {% endif %}
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="post">
+
+            <h3>
+                No notifications
+            </h3>
+
+            <p>
+                You're all caught up! 🎉
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}
