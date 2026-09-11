@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        {% block title %}My Blog{% endblock %}
+    </title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background: #f4f4f4;
+            color: #333;
+        }
+
+        header {
+            background: #222;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        nav {
+            background: #333;
+            padding: 14px;
+            text-align: center;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 12px;
+        }
+
+        nav a:hover {
+            color: #00bcd4;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            margin: 30px auto;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+
+        button,
+        .button {
+            display: inline-block;
+            padding: 10px 16px;
+            background: #222;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        button:hover,
+        .button:hover {
+            background: #444;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+
+        footer {
+            margin-top: 50px;
+            background: #222;
+            color: white;
+            text-align: center;
+            padding: 25px;
+        }
+
+        .flash {
+            padding: 12px;
+            margin-bottom: 20px;
+            background: #e8f5e9;
+            border-radius: 5px;
+        }
+
+        @media (max-width: 600px) {
+
+            nav a {
+                display: inline-block;
+                margin: 6px;
+            }
+
+            .container {
+                width: 94%;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<header>
+
+    <h1>My Blog</h1>
+
+    <p>Stories, Ideas & Knowledge</p>
+
+</header>
+
+
+<nav>
+
+    <a href="{{ url_for('home') }}">
+        Home
+    </a>
+
+
+    {% if session.get("user_id") %}
+
+        <a href="{{ url_for('create_post') }}">
+            Create Post
+        </a>
+
+        <a href="{{ url_for(
+            'profile',
+            username=session.get('username')
+        ) }}">
+            Profile
+        </a>
+
+
+<a href="{{ url_for('notifications') }}">
+
+    🔔 Notifications
+
+    {% if notification_count > 0 %}
+
+        <strong>
+            ({{ notification_count }})
+        </strong>
+
+    {% endif %}
+
+</a>
+
+        <a href="{{ url_for('logout') }}">
+            Logout
+        </a>
+        
+        
+        <a href="{{ url_for('admin_login') }}">
+    🛠️ Admin Login
+</a>
+
+        <a href="{{ url_for('search') }}">
+     🔎 Search
+</a>
+
+        <span style="color:white;">
+            👋 {{ session.get("username") }}
+        </span>
+
+    {% else %}
+
+        <a href="{{ url_for('login') }}">
+            Login
+        </a>
+
+        <a href="{{ url_for('register') }}">
+            Register
+        </a>
+        
+        
+        {% if session.get("user_id") %}
+    <a href="{{ url_for('user_dashboard') }}">
+        📊 Dashboard
+    </a>
+{% endif %}
+        
+        
+        <form
+    action="{{ url_for('search') }}"
+    method="GET"
+    style="display:inline-block; margin-left:10px;"
+>
+
+    <input
+        type="search"
+        name="q"
+        placeholder="Search..."
+        style="width:150px; padding:8px;"
+    >
+
+    <button type="submit">
+        🔎
+    </button>
+
+</form>
+
+    {% endif %}
+
+</nav>
+
+
+<div class="container">
+
+    {% with messages = get_flashed_messages() %}
+
+        {% if messages %}
+
+            {% for message in messages %}
+
+                <div class="flash">
+                    {{ message }}
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    {% endwith %}
+
+
+    {% block content %}
+
+    {% endblock %}
+
+</div>
+
+
+<footer>
+
+    <p>
+        &copy; 2026 My Blog.
+        All rights reserved.
+    </p>
+
+</footer>
+
+</body>
+
+</html>
