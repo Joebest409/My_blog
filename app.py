@@ -1,553 +1,601 @@
+import os
+import sqlite3
+import uuid
+
 from flask import (
     Flask,
     render_template,
     request,
     redirect,
-    session,
-    send_from_directory,
-    url_for
+    url_for,
+    session
 )
-from werkzeug.security import generate_password_hash, check_password_hash
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
+
 from werkzeug.utils import secure_filename
 
-import sqlite3
-import os
+
+# =========================================================
+# FLASK APP
+# =========================================================
+
 app = Flask(__name__)
 
-app.secret_key = "change-this-secret-key"
-
-app.config["UPLOAD_FOLDER"] = os.path.join(
-    app.root_path,
-    "uploads"
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "dev-secret-key-change-in-production"
 )
 
-app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
+DATABASE = "blog.db"
 
-ALLOWED_EXTENSIONS = {
-    "png",
+
+# =========================================================
+# MEDIA SETTINGS
+# =========================================================
+
+MEDIA_FOLDER = "static/media"
+
+ALLOWED_MEDIA_EXTENSIONS = {
     "jpg",
     "jpeg",
+    "png",
+    "gif",
+    "webp",
+    "mp3",
+    "wav",
+    "ogg",
+    "m4a",
+    "mp4",
+    "webm",
+    "mov"
+}
+
+os.makedirs(MEDIA_FOLDER, exist_ok=True)
+
+
+# =========================================================
+# PROFILE PICTURE SETTINGS
+# =========================================================
+
+PROFILE_FOLDER = "static/profile_pictures"
+
+ALLOWED_PROFILE_EXTENSIONS = {
+    "jpg",
+    "jpeg",
+    "png",
     "gif",
     "webp"
 }
 
-os.makedirs(
-    app.config["UPLOAD_FOLDER"],
-    exist_ok=True
-)
-
-def allowed_file(filename):
-
-    return (
-        "." in filename
-        and filename.rsplit(".", 1)[1].lower()
-        in ALLOWED_EXTENSIONS
-    )
-app.secret_key = "change-this-secret-key"
+os.makedirs(PROFILE_FOLDER, exist_ok=True)
 
 
-# =========================
-# DATABASE
-# =========================
+# =========================================================
+# CATEGORIES
+# =========================================================
+
+CATEGORIES = [
+    "Technology",
+    "Education",
+    "Business",
+    "News",
+    "Music",
+    "Health",
+    "General"
+]
+
+
+# =========================================================
+# DATABASE CONNECTION
+# =========================================================
 
 def get_db():
-    conn = sqlite3.connect("blog.db")
+
+    conn = sqlite3.connect(DATABASE)
+
     conn.row_factory = sqlite3.Row
+
     return conn
 
-def init_db():
-    conn = get_db()
 
-    # POSTS TABLE
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            content TEXT NOT NULL,
-            author TEXT NOT NULL,
-            category TEXT DEFAULT 'General',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+# =========================================================
+# PROFILE PICTURE CHECK
+# =========================================================
 
-    # USERS TABLE
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            is_admin INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+def allowed_profile_picture(filename):
 
-    # CREATE DEFAULT ADMIN
-    conn.execute("""
-        INSERT OR IGNORE INTO users
-        (username, email, password, is_admin)
-        VALUES (?, ?, ?, ?)
+    if not filename:
+        return False
+
+    if "." not in filename:
+        return False
+
+    extension = filename.rsplit(".", 1)[1].lower()
+
+    return extension in ALLOWED_PROFILE_EXTENSIONS
+
+
+# =========================================================
+# MEDIA CHECK
+# =========================================================
+
+def allowed_media(filename):
+
+    if not filename:
+        return False
+
+    if "." not in filename:
+        return False
+
+    extension = filename.rsplit(".", 1)[1].lower()
+
+    return extension in ALLOWED_MEDIA_EXTENSIONS
+
+
+# =========================================================
+# GET MEDIA TYPE
+# =========================================================
+
+def get_media_type(filename):
+
+    if not filename or "." not in filename:
+        return "other"
+
+    extension = filename.rsplit(".", 1)[1].lower()
+
+    if extension in {
+        "jpg",
+        "jpeg",
+        "png",
+        "gif",
+        "webp"
+    }:
+        return "image"
+
+    if extension in {
+        "mp3",
+        "wav",
+        "ogg",
+        "m4a"
+    }:
+        return "audio"
+
+    if extension in {
+        "mp4",
+        "webm",
+        "mov"
+    }:
+        return "video"
+
+    return "other"
+
+
+# =========================================================
+# DELETE MEDIA FILES FOR A POST
+# =========================================================
+
+def delete_post_media_files(conn, post_id):
+
+    media_files = conn.execute("""
+        SELECT filename
+        FROM media
+        WHERE post_id = ?
     """, (
-        "admin",
-        "admin@example.com",
-        generate_password_hash("admin123"),
-        1
+        post_id,
+    )).fetchall()
+
+    for media in media_files:
+
+        file_path = os.path.join(
+            MEDIA_FOLDER,
+            media["filename"]
+        )
+
+        if os.path.exists(file_path):
+
+            try:
+                os.remove(file_path)
+
+            except OSError:
+                pass
+
+    conn.execute("""
+        DELETE FROM media
+        WHERE post_id = ?
+    """, (
+        post_id,
     ))
 
-    # COMMENTS TABLE
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            post_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (post_id) REFERENCES posts(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
 
-    # COMMENT LIKES TABLE
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS comment_likes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            comment_id INTEGER NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, comment_id)
-        )
-    """)
+# =========================================================
+# NOTIFICATION COUNT
+# =========================================================
 
-    conn.commit()
-    conn.close()
+def get_notification_count():
 
-
-def add_missing_columns():
+    if "user_id" not in session:
+        return 0
 
     conn = get_db()
 
-    # USERS
-    try:
+    count = conn.execute("""
+        SELECT COUNT(*)
+        FROM notifications
+        WHERE user_id = ?
+        AND is_read = 0
+    """, (
+        session["user_id"],
+    )).fetchone()[0]
+
+    conn.close()
+
+    return count
+
+
+# =========================================================
+# INITIALIZE DATABASE
+# =========================================================
+
+def init_db():
+
+    conn = get_db()
+
+
+    # =====================================================
+    # USERS TABLE
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            username TEXT NOT NULL UNIQUE,
+
+            email TEXT NOT NULL UNIQUE,
+
+            password TEXT NOT NULL,
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP
+
+        )
+    """)
+
+
+    # =====================================================
+    # PROFILE PICTURE MIGRATION
+    # =====================================================
+
+    user_columns = conn.execute(
+        "PRAGMA table_info(users)"
+    ).fetchall()
+
+    user_column_names = [
+        column["name"]
+        for column in user_columns
+    ]
+
+    if "profile_picture" not in user_column_names:
+
         conn.execute("""
             ALTER TABLE users
-            ADD COLUMN is_admin INTEGER DEFAULT 0
+            ADD COLUMN profile_picture TEXT
         """)
-    except sqlite3.OperationalError:
-        pass
 
-    # POSTS CATEGORY
-    try:
+
+    # =====================================================
+    # POSTS TABLE
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS posts (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            title TEXT NOT NULL,
+
+            content TEXT NOT NULL,
+
+            author TEXT NOT NULL,
+
+            category TEXT DEFAULT 'General',
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP,
+
+            likes INTEGER DEFAULT 0,
+
+            views INTEGER DEFAULT 0
+
+        )
+    """)
+
+
+    # =====================================================
+    # POSTS MIGRATION
+    # =====================================================
+
+    columns = conn.execute(
+        "PRAGMA table_info(posts)"
+    ).fetchall()
+
+    column_names = [
+        column["name"]
+        for column in columns
+    ]
+
+    if "category" not in column_names:
+
         conn.execute("""
             ALTER TABLE posts
             ADD COLUMN category TEXT DEFAULT 'General'
         """)
-    except sqlite3.OperationalError:
-        pass
 
-    # POSTS IMAGE
-    try:
+    if "likes" not in column_names:
+
         conn.execute("""
             ALTER TABLE posts
-            ADD COLUMN image TEXT
+            ADD COLUMN likes INTEGER DEFAULT 0
         """)
-    except sqlite3.OperationalError:
-        pass
 
-    # POSTS FEATURED
-    try:
-        conn.execute("""
-            ALTER TABLE posts
-            ADD COLUMN featured INTEGER DEFAULT 0
-        """)
-    except sqlite3.OperationalError:
-        pass
+    if "views" not in column_names:
 
-    # POSTS VIEWS
-    try:
         conn.execute("""
             ALTER TABLE posts
             ADD COLUMN views INTEGER DEFAULT 0
         """)
-    except sqlite3.OperationalError:
-        pass
 
-    # COMMENTS USERNAME
-    try:
+
+    # =====================================================
+    # COMMENTS TABLE
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comments (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            post_id INTEGER NOT NULL,
+
+            user_id INTEGER NOT NULL,
+
+            content TEXT NOT NULL,
+
+            parent_id INTEGER,
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (post_id)
+                REFERENCES posts(id),
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+
+        )
+    """)
+
+
+    # =====================================================
+    # COMMENTS MIGRATION
+    # =====================================================
+
+    comment_columns = conn.execute(
+        "PRAGMA table_info(comments)"
+    ).fetchall()
+
+    comment_column_names = [
+        column["name"]
+        for column in comment_columns
+    ]
+
+    if "parent_id" not in comment_column_names:
+
         conn.execute("""
             ALTER TABLE comments
-            ADD COLUMN username TEXT DEFAULT 'Anonymous'
+            ADD COLUMN parent_id INTEGER
         """)
-    except sqlite3.OperationalError:
-        pass
 
-    # COMMENTS PARENT ID
-    try:
-        conn.execute("""
-            ALTER TABLE comments
-            ADD COLUMN parent_id INTEGER DEFAULT NULL
-        """)
-    except sqlite3.OperationalError:
-        pass
+
+    # =====================================================
+    # COMMENT LIKES
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comment_likes (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            comment_id INTEGER NOT NULL,
+
+            user_id INTEGER NOT NULL,
+
+            UNIQUE(comment_id, user_id),
+
+            FOREIGN KEY (comment_id)
+                REFERENCES comments(id),
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+
+        )
+    """)
+
+
+    # =====================================================
+    # POST LIKES
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS post_likes (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            post_id INTEGER NOT NULL,
+
+            user_id INTEGER NOT NULL,
+
+            UNIQUE(post_id, user_id),
+
+            FOREIGN KEY (post_id)
+                REFERENCES posts(id),
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+
+        )
+    """)
+
+
+    # =====================================================
+    # ADMINS
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS admins (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            username TEXT NOT NULL UNIQUE,
+
+            password TEXT NOT NULL,
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP
+
+        )
+    """)
+
+
+    # =====================================================
+    # NOTIFICATIONS
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS notifications (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            user_id INTEGER NOT NULL,
+
+            message TEXT NOT NULL,
+
+            post_id INTEGER,
+
+            is_read INTEGER DEFAULT 0,
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+
+        )
+    """)
+
+
+    # =====================================================
+    # MEDIA TABLE
+    # =====================================================
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS media (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            post_id INTEGER NOT NULL,
+
+            filename TEXT NOT NULL,
+
+            original_name TEXT,
+
+            media_type TEXT NOT NULL,
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (post_id)
+                REFERENCES posts(id)
+
+        )
+    """)
+
 
     conn.commit()
+
     conn.close()
 
 
-# =========================
-# DATABASE MIGRATIONS
-# =========================
-
-def add_missing_columns():
-
-    conn = get_db()
-
-    # Add is_admin if old users table doesn't have it
-    try:
-
-        conn.execute("""
-            ALTER TABLE users
-            ADD COLUMN is_admin INTEGER DEFAULT 0
-        """)
-
-    except sqlite3.OperationalError:
-
-        pass
-
-
-    # Add category if old posts table doesn't have it
-    try:
-
-        conn.execute("""
-            ALTER TABLE posts
-            ADD COLUMN category TEXT DEFAULT 'General'
-        """)
-
-    except sqlite3.OperationalError:
-
-        pass
-
-
-    conn.commit()
-    conn.close()
-
-
-# =========================
-# ADMIN CHECK
-# =========================
-
-def admin_required():
-
-    if not session.get("user_id"):
-        return False
-
-    if session.get("is_admin") != 1:
-        return False
-
-    return True
-
-
-# =========================
+# =========================================================
 # HOME
-# =========================
+# =========================================================
 
 @app.route("/")
 def home():
 
-    page = request.args.get("page", 1, type=int)
+    page = request.args.get(
+        "page",
+        1,
+        type=int
+    )
 
-    per_page = 5
+    if page < 1:
+        page = 1
+
+    per_page = 8
 
     offset = (page - 1) * per_page
 
     conn = get_db()
 
-    featured_posts = conn.execute("""
-        SELECT *
+    total_posts = conn.execute("""
+        SELECT COUNT(*)
         FROM posts
-        WHERE featured = 1
-        ORDER BY created_at DESC
-        LIMIT 3
-    """).fetchall()
+    """).fetchone()[0]
+
+    total_pages = (
+        (total_posts + per_page - 1)
+        // per_page
+    )
 
     posts = conn.execute("""
         SELECT *
         FROM posts
-        WHERE featured = 0
         ORDER BY created_at DESC
-        LIMIT ? OFFSET ?
+        LIMIT ?
+        OFFSET ?
     """, (
         per_page,
         offset
     )).fetchall()
 
-    total_posts = conn.execute("""
-        SELECT COUNT(*)
+    popular_posts = conn.execute("""
+        SELECT *
         FROM posts
-        WHERE featured = 0
-    """).fetchone()[0]
+        ORDER BY COALESCE(views, 0) DESC
+        LIMIT 5
+    """).fetchall()
 
     conn.close()
 
-    total_pages = (
-        total_posts + per_page - 1
-    ) // per_page
-
     return render_template(
         "index.html",
-        featured_posts=featured_posts,
         posts=posts,
+        popular_posts=popular_posts,
         page=page,
-        total_pages=total_pages
-    )
-
-# =========================
-# VIEW POST
-# =========================
-
-@app.route("/post/<int:post_id>")
-def post(post_id):
-
-    conn = get_db()
-
-    post = conn.execute("""
-        SELECT *
-        FROM posts
-        WHERE id = ?
-    """, (post_id,)).fetchone()
-
-    if post is None:
-        conn.close()
-        return "Post not found", 404
-
-    conn.execute("""
-        UPDATE posts
-        SET views = views + 1
-        WHERE id = ?
-    """, (post_id,))
-
-    conn.commit()
-
-    post = conn.execute("""
-        SELECT *
-        FROM posts
-        WHERE id = ?
-    """, (post_id,)).fetchone()
-
-    conn.close()
-
-    return render_template(
-        "post.html",
-        post=post
-    )
-# =====================
-# CREATE POST
-# =====================
-
-@app.route("/create-post", methods=["GET", "POST"])
-def create_post():
-
-    if not admin_required():
-        return "Access denied. Admins only.", 403
-
-    if request.method == "POST":
-
-        title = request.form["title"].strip()
-        content = request.form["content"].strip()
-        author = request.form["author"].strip()
-        category = request.form["category"].strip()
-
-        # Get uploaded image
-        file = request.files.get("image")
-
-        image_filename = None
-
-        if file and file.filename:
-
-            if not allowed_file(file.filename):
-                return "Invalid image type.", 400
-
-            image_filename = secure_filename(file.filename)
-
-            base, extension = os.path.splitext(image_filename)
-
-            counter = 1
-
-            while os.path.exists(
-                os.path.join(
-                    app.config["UPLOAD_FOLDER"],
-                    image_filename
-                )
-            ):
-
-                image_filename = (
-                    f"{base}_{counter}{extension}"
-                )
-
-                counter += 1
-
-            file.save(
-                os.path.join(
-                    app.config["UPLOAD_FOLDER"],
-                    image_filename
-                )
-            )
-
-        conn = get_db()
-
-        conn.execute("""
-            INSERT INTO posts
-            (title, content, author, category, image)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            title,
-            content,
-            author,
-            category,
-            image_filename
-        ))
-
-        conn.commit()
-        conn.close()
-
-        return redirect("/")
-
-    return render_template("create_post.html")
-
-# =========================
-# EDIT POST
-# =========================
-
-@app.route("/edit-post/<int:post_id>", methods=["GET", "POST"])
-def edit_post(post_id):
-
-    if not admin_required():
-        return "Access denied. Admins only.", 403
-
-    conn = get_db()
-
-    post = conn.execute("""
-        SELECT *
-        FROM posts
-        WHERE id = ?
-    """, (post_id,)).fetchone()
-
-    if post is None:
-        conn.close()
-        return "Post not found", 404
-
-    if request.method == "POST":
-
-        title = request.form.get("title", "").strip()
-        content = request.form.get("content", "").strip()
-        author = request.form.get("author", "").strip()
-        category = request.form.get("category", "General").strip()
-
-        # Keep existing image
-        image_filename = post["image"]
-
-        # Get new image
-        file = request.files.get("image")
-
-        if file and file.filename:
-
-            if not allowed_file(file.filename):
-                conn.close()
-                return "Invalid image type.", 400
-
-            filename = secure_filename(file.filename)
-
-            base, extension = os.path.splitext(filename)
-
-            counter = 1
-
-            while os.path.exists(
-                os.path.join(
-                    app.config["UPLOAD_FOLDER"],
-                    filename
-                )
-            ):
-                filename = f"{base}_{counter}{extension}"
-                counter += 1
-
-            # Save new image
-            file.save(
-                os.path.join(
-                    app.config["UPLOAD_FOLDER"],
-                    filename
-                )
-            )
-
-            image_filename = filename
-
-        conn.execute("""
-            UPDATE posts
-            SET title = ?,
-                content = ?,
-                author = ?,
-                category = ?,
-                image = ?
-            WHERE id = ?
-        """, (
-            title,
-            content,
-            author,
-            category,
-            image_filename,
-            post_id
-        ))
-
-        conn.commit()
-
-        updated_post = conn.execute("""
-            SELECT *
-            FROM posts
-            WHERE id = ?
-        """, (post_id,)).fetchone()
-
-        conn.close()
-
-        return redirect(
-            url_for("post", post_id=post_id)
-        )
-
-    conn.close()
-
-    return render_template(
-        "edit_post.html",
-        post=post
+        total_pages=total_pages,
+        categories=CATEGORIES
     )
 
 
-# =========================
-# DELETE POST
-# =========================
-
-@app.route(
-    "/delete-post/<int:post_id>",
-    methods=["POST"]
-)
-def delete_post(post_id):
-
-    if not admin_required():
-        return "Access denied. Admins only.", 403
-
-
-    conn = get_db()
-
-    conn.execute("""
-        DELETE FROM posts
-        WHERE id = ?
-    """, (post_id,))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/")
-
-
-# =========================
+# =========================================================
 # REGISTER
-# =========================
+# =========================================================
 
 @app.route(
     "/register",
@@ -557,18 +605,27 @@ def register():
 
     if request.method == "POST":
 
-        username = request.form["username"]
-        email = request.form["email"]
-        password = request.form["password"]
+        username = request.form[
+            "username"
+        ].strip()
 
+        email = request.form[
+            "email"
+        ].strip()
 
-        password_hash = generate_password_hash(
+        password = request.form[
+            "password"
+        ]
+
+        if not username or not email or not password:
+
+            return "All fields are required."
+
+        hashed_password = generate_password_hash(
             password
         )
 
-
         conn = get_db()
-
 
         try:
 
@@ -577,20 +634,16 @@ def register():
                 (
                     username,
                     email,
-                    password,
-                    is_admin
+                    password
                 )
-
-                VALUES (?, ?, ?, 0)
+                VALUES (?, ?, ?)
             """, (
                 username,
                 email,
-                password_hash
+                hashed_password
             ))
 
-
             conn.commit()
-
 
         except sqlite3.IntegrityError:
 
@@ -598,20 +651,20 @@ def register():
 
             return "Username or email already exists."
 
-
         conn.close()
 
-        return redirect("/login")
-
+        return redirect(
+            url_for("login")
+        )
 
     return render_template(
         "register.html"
     )
 
 
-# =========================
+# =========================================================
 # LOGIN
-# =========================
+# =========================================================
 
 @app.route(
     "/login",
@@ -621,9 +674,13 @@ def login():
 
     if request.method == "POST":
 
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form[
+            "username"
+        ].strip()
 
+        password = request.form[
+            "password"
+        ]
 
         conn = get_db()
 
@@ -631,283 +688,469 @@ def login():
             SELECT *
             FROM users
             WHERE username = ?
-        """, (username,)).fetchone()
+        """, (
+            username,
+        )).fetchone()
 
         conn.close()
 
-
-        if user is None:
-
-            return "Invalid username or password."
-
-
-        if not check_password_hash(
+        if user and check_password_hash(
             user["password"],
             password
         ):
 
-            return "Invalid username or password."
+            session["user_id"] = user["id"]
 
+            session["username"] = user["username"]
 
-        # Create login session
-        session.clear()
+            return redirect(
+                url_for("home")
+            )
 
-        session["user_id"] = user["id"]
-
-        session["username"] = user["username"]
-
-        session["is_admin"] = int(
-            user["is_admin"]
-        )
-
-
-        return redirect("/")
-
+        return "Invalid username or password."
 
     return render_template(
         "login.html"
     )
 
 
-# =========================
+# =========================================================
 # LOGOUT
-# =========================
+# =========================================================
 
 @app.route("/logout")
 def logout():
 
     session.clear()
 
-    return redirect("/")
-
-
-# =========================
-# ADMIN DASHBOARD
-# =========================
-
-@app.route("/admin")
-def admin_dashboard():
-
-    if not admin_required():
-        return "Access denied. Admins only.", 403
-
-    conn = get_db()
-
-    # Get posts
-    posts = conn.execute("""
-        SELECT *
-        FROM posts
-        ORDER BY created_at DESC
-    """).fetchall()
-
-    # Get users
-    users = conn.execute("""
-        SELECT
-            id,
-            username,
-            email,
-            is_admin,
-            created_at
-        FROM users
-        ORDER BY created_at DESC
-    """).fetchall()
-
-    # Statistics
-    total_users = conn.execute("""
-        SELECT COUNT(*)
-        FROM users
-    """).fetchone()[0]
-
-    total_posts = conn.execute("""
-        SELECT COUNT(*)
-        FROM posts
-    """).fetchone()[0]
-
-    total_comments = conn.execute("""
-        SELECT COUNT(*)
-        FROM comments
-    """).fetchone()[0]
-
-    total_likes = conn.execute("""
-        SELECT COUNT(*)
-        FROM likes
-    """).fetchone()[0]
-
-    conn.close()
-
-    return render_template(
-        "admin_dashboard.html",
-        posts=posts,
-        users=users,
-        total_users=total_users,
-        total_posts=total_posts,
-        total_comments=total_comments,
-        total_likes=total_likes
+    return redirect(
+        url_for("home")
     )
 
 
-# =========================
-# SETUP FIRST ADMIN
-# =========================
+# =========================================================
+# CREATE POST - ADMIN ONLY
+# =========================================================
 
 @app.route(
-    "/setup-admin",
+    "/create",
     methods=["GET", "POST"]
 )
-def setup_admin():
+def create_post():
 
-    conn = get_db()
+    if "admin_id" not in session:
 
-
-    existing_admin = conn.execute("""
-        SELECT id
-        FROM users
-        WHERE is_admin = 1
-        LIMIT 1
-    """).fetchone()
-
-
-    if existing_admin:
-
-        conn.close()
-
-        return "Admin account already exists."
-
+        return redirect(
+            url_for("admin_login")
+        )
 
     if request.method == "POST":
 
-        username = request.form["username"]
-        email = request.form["email"]
-        password = request.form["password"]
+        title = request.form[
+            "title"
+        ].strip()
 
+        content = request.form[
+            "content"
+        ].strip()
 
-        password_hash = generate_password_hash(
-            password
-        )
+        category = request.form.get(
+            "category",
+            "General"
+        ).strip()
 
+        if not title or not content:
 
-        try:
+            return "Title and content are required."
 
-            conn.execute("""
-                INSERT INTO users
-                (
-                    username,
-                    email,
-                    password,
-                    is_admin
-                )
+        if category not in CATEGORIES:
 
-                VALUES (?, ?, ?, 1)
-            """, (
-                username,
-                email,
-                password_hash
-            ))
+            category = "General"
 
+        author = session[
+            "admin_username"
+        ]
 
-            conn.commit()
+        conn = get_db()
 
+        conn.execute("""
+            INSERT INTO posts
+            (
+                title,
+                content,
+                author,
+                category
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            title,
+            content,
+            author,
+            category
+        ))
 
-        except sqlite3.IntegrityError:
-
-            conn.close()
-
-            return "Username or email already exists."
-
+        conn.commit()
 
         conn.close()
 
-        return redirect("/login")
-
-
-    conn.close()
+        return redirect(
+            url_for("admin_dashboard")
+        )
 
     return render_template(
-        "setup_admin.html"
+        "create_post.html",
+        categories=CATEGORIES
     )
-    
-    
-# =========================
-#SEARCH POST
-# =========================
 
-@app.route("/search")
-def search():
 
-    query = request.args.get("q", "").strip()
+# =========================================================
+# VIEW POST
+# =========================================================
+
+@app.route("/post/<int:post_id>")
+def post(post_id):
 
     conn = get_db()
 
-    if query:
+    existing_post = conn.execute("""
+        SELECT id
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
 
-        posts = conn.execute("""
-            SELECT *
-            FROM posts
-            WHERE title LIKE ?
-               OR content LIKE ?
-               OR author LIKE ?
-            ORDER BY created_at DESC
-        """, (
-            f"%{query}%",
-            f"%{query}%",
-            f"%{query}%"
-        )).fetchall()
+    if existing_post is None:
 
-    else:
+        conn.close()
 
-        posts = []
+        return "Post not found", 404
 
-    conn.close()
 
-    return render_template(
-        "search.html",
-        posts=posts,
-        query=query
-    )
-    
-    
-# ========================
-# CATEGORY
-# ========================
+    # Increase views
 
-@app.route("/category/<category_name>")
-def category(category_name):
+    conn.execute("""
+        UPDATE posts
+        SET views = COALESCE(views, 0) + 1
+        WHERE id = ?
+    """, (
+        post_id,
+    ))
 
-    conn = get_db()
+    conn.commit()
 
-    posts = conn.execute("""
+
+    # Get post
+
+    post = conn.execute("""
+        SELECT *
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+
+    # Get media
+
+    media = conn.execute("""
+        SELECT *
+        FROM media
+        WHERE post_id = ?
+        ORDER BY created_at ASC
+    """, (
+        post_id,
+    )).fetchall()
+
+
+    # Get comments
+
+    comments = conn.execute("""
+        SELECT
+            comments.*,
+            users.username,
+            users.profile_picture,
+
+            (
+                SELECT COUNT(*)
+                FROM comment_likes
+                WHERE comment_likes.comment_id =
+                    comments.id
+            ) AS comment_likes
+
+        FROM comments
+
+        JOIN users
+        ON comments.user_id = users.id
+
+        WHERE comments.post_id = ?
+
+        ORDER BY comments.created_at ASC
+
+    """, (
+        post_id,
+    )).fetchall()
+
+
+    # Get related posts
+
+    related_posts = conn.execute("""
         SELECT *
         FROM posts
         WHERE category = ?
+        AND id != ?
         ORDER BY created_at DESC
-    """, (category_name,)).fetchall()
+        LIMIT 5
+    """, (
+        post["category"],
+        post_id
+    )).fetchall()
 
     conn.close()
 
     return render_template(
-        "category.html",
-        posts=posts,
-        category=category_name
+        "post.html",
+        post=post,
+        comments=comments,
+        related_posts=related_posts,
+        media=media
     )
-    
-    
-# =======================
-# COMMENT
-# =======================
+
+
+# =========================================================
+# UPLOAD MEDIA - ADMIN ONLY
+# =========================================================
 
 @app.route(
-    "/post/<int:post_id>/comment",
+    "/admin/post/<int:post_id>/media",
     methods=["POST"]
 )
-def add_comment(post_id):
+def upload_media(post_id):
 
-    if not session.get("user_id"):
-        return redirect("/login")
+    if "admin_id" not in session:
 
-    content = request.form["content"].strip()
+        return redirect(
+            url_for("admin_login")
+        )
 
-    if not content:
-        return redirect(f"/post/{post_id}")
+    file = request.files.get("media")
+
+    if not file or not file.filename:
+
+        return "Please select a media file."
+
+
+    if not allowed_media(file.filename):
+
+        return "Unsupported media type."
+
+
+    conn = get_db()
+
+
+    # Check post
+
+    post = conn.execute("""
+        SELECT id
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+    if post is None:
+
+        conn.close()
+
+        return "Post not found", 404
+
+
+    # Secure original filename
+
+    original_name = secure_filename(
+        file.filename
+    )
+
+    if not original_name:
+
+        conn.close()
+
+        return "Invalid filename."
+
+
+    extension = original_name.rsplit(
+        ".",
+        1
+    )[1].lower()
+
+
+    # Generate unique filename
+
+    filename = (
+        str(uuid.uuid4())
+        + "."
+        + extension
+    )
+
+
+    file_path = os.path.join(
+        MEDIA_FOLDER,
+        filename
+    )
+
+
+    # Save file
+
+    file.save(file_path)
+
+
+    # Determine type
+
+    media_type = get_media_type(
+        original_name
+    )
+
+
+    if media_type == "other":
+
+        if os.path.exists(file_path):
+
+            try:
+                os.remove(file_path)
+
+            except OSError:
+                pass
+
+        conn.close()
+
+        return "Unsupported media type."
+
+
+    # Save database record
+
+    conn.execute("""
+        INSERT INTO media
+        (
+            post_id,
+            filename,
+            original_name,
+            media_type
+        )
+        VALUES (?, ?, ?, ?)
+    """, (
+        post_id,
+        filename,
+        original_name,
+        media_type
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for(
+            "post",
+            post_id=post_id
+        )
+    )
+
+
+# =========================================================
+# DELETE MEDIA - ADMIN ONLY
+# =========================================================
+
+@app.route(
+    "/admin/media/delete/<int:media_id>",
+    methods=["POST"]
+)
+def delete_media(media_id):
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+    conn = get_db()
+
+
+    media = conn.execute("""
+        SELECT *
+        FROM media
+        WHERE id = ?
+    """, (
+        media_id,
+    )).fetchone()
+
+
+    if media is None:
+
+        conn.close()
+
+        return "Media not found", 404
+
+
+    post_id = media["post_id"]
+
+
+    # Delete physical file
+
+    file_path = os.path.join(
+        MEDIA_FOLDER,
+        media["filename"]
+    )
+
+
+    if os.path.exists(file_path):
+
+        try:
+            os.remove(file_path)
+
+        except OSError:
+            pass
+
+
+    # Delete database record
+
+    conn.execute("""
+        DELETE FROM media
+        WHERE id = ?
+    """, (
+        media_id,
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for(
+            "post",
+            post_id=post_id
+        )
+    )
+
+
+# =========================================================
+# LIKE / UNLIKE POST
+# =========================================================
+
+@app.route(
+    "/post/<int:post_id>/like",
+    methods=["POST"]
+)
+def like_post(post_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
 
     conn = get_db()
 
@@ -915,346 +1158,2631 @@ def add_comment(post_id):
         SELECT id
         FROM posts
         WHERE id = ?
-    """, (post_id,)).fetchone()
+    """, (
+        post_id,
+    )).fetchone()
 
     if post is None:
+
         conn.close()
+
         return "Post not found", 404
+
+
+    existing_like = conn.execute("""
+        SELECT id
+        FROM post_likes
+        WHERE post_id = ?
+        AND user_id = ?
+    """, (
+        post_id,
+        session["user_id"]
+    )).fetchone()
+
+
+    if existing_like:
+
+        conn.execute("""
+            DELETE FROM post_likes
+            WHERE post_id = ?
+            AND user_id = ?
+        """, (
+            post_id,
+            session["user_id"]
+        ))
+
+        conn.execute("""
+            UPDATE posts
+            SET likes =
+                CASE
+                    WHEN COALESCE(likes, 0) > 0
+                    THEN likes - 1
+                    ELSE 0
+                END
+            WHERE id = ?
+        """, (
+            post_id,
+        ))
+
+
+    else:
+
+        conn.execute("""
+            INSERT INTO post_likes
+            (
+                post_id,
+                user_id
+            )
+            VALUES (?, ?)
+        """, (
+            post_id,
+            session["user_id"]
+        ))
+
+        conn.execute("""
+            UPDATE posts
+            SET likes = COALESCE(likes, 0) + 1
+            WHERE id = ?
+        """, (
+            post_id,
+        ))
+
+
+    conn.commit()
+
+    conn.close()
+
+    return redirect(
+        url_for(
+            "post",
+            post_id=post_id
+        )
+    )
+
+
+# =========================================================
+# ADD COMMENT / REPLY
+# =========================================================
+
+@app.route(
+    "/post/<int:post_id>/comment",
+    methods=["POST"]
+)
+def add_comment(post_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    content = request.form.get(
+        "content",
+        ""
+    ).strip()
+
+    if not content:
+
+        return redirect(
+            url_for(
+                "post",
+                post_id=post_id
+            )
+        )
+
+    parent_id = request.form.get(
+        "parent_id",
+        type=int
+    )
+
+    conn = get_db()
+
+
+    post = conn.execute("""
+        SELECT id
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+
+    if post is None:
+
+        conn.close()
+
+        return "Post not found", 404
+
+
+    parent_comment = None
+
+
+    if parent_id:
+
+        parent_comment = conn.execute("""
+            SELECT
+                id,
+                user_id
+            FROM comments
+            WHERE id = ?
+            AND post_id = ?
+        """, (
+            parent_id,
+            post_id
+        )).fetchone()
+
+
+        if parent_comment is None:
+
+            conn.close()
+
+            return "Invalid parent comment", 400
+
 
     conn.execute("""
         INSERT INTO comments
-        (post_id, user_id, content)
-        VALUES (?, ?, ?)
+        (
+            post_id,
+            user_id,
+            content,
+            parent_id
+        )
+        VALUES (?, ?, ?, ?)
     """, (
         post_id,
         session["user_id"],
-        content
+        content,
+        parent_id
     ))
 
+
+    # Notification for reply
+
+    if parent_comment:
+
+        parent_user_id = parent_comment["user_id"]
+
+        if parent_user_id != session["user_id"]:
+
+            username = session["username"]
+
+            message = (
+                f"{username} replied to your comment."
+            )
+
+            conn.execute("""
+                INSERT INTO notifications
+                (
+                    user_id,
+                    message,
+                    post_id
+                )
+                VALUES (?, ?, ?)
+            """, (
+                parent_user_id,
+                message,
+                post_id
+            ))
+
+
     conn.commit()
+
     conn.close()
 
-    return redirect(f"/post/{post_id}")
-    
-    
-# ======================
-# ADMIN COMMENT
-# ======================
+    return redirect(
+        url_for(
+            "post",
+            post_id=post_id
+        )
+    )
+
+
+# =========================================================
+# LIKE / UNLIKE COMMENT
+# =========================================================
+
+@app.route(
+    "/comment/<int:comment_id>/like",
+    methods=["POST"]
+)
+def like_comment(comment_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    conn = get_db()
+
+
+    comment = conn.execute("""
+        SELECT
+            id,
+            post_id
+        FROM comments
+        WHERE id = ?
+    """, (
+        comment_id,
+    )).fetchone()
+
+
+    if comment is None:
+
+        conn.close()
+
+        return "Comment not found", 404
+
+
+    existing_like = conn.execute("""
+        SELECT id
+        FROM comment_likes
+        WHERE comment_id = ?
+        AND user_id = ?
+    """, (
+        comment_id,
+        session["user_id"]
+    )).fetchone()
+
+
+    if existing_like:
+
+        conn.execute("""
+            DELETE FROM comment_likes
+            WHERE comment_id = ?
+            AND user_id = ?
+        """, (
+            comment_id,
+            session["user_id"]
+        ))
+
+
+    else:
+
+        conn.execute("""
+            INSERT INTO comment_likes
+            (
+                comment_id,
+                user_id
+            )
+            VALUES (?, ?)
+        """, (
+            comment_id,
+            session["user_id"]
+        ))
+
+
+    conn.commit()
+
+    conn.close()
+
+    return redirect(
+        url_for(
+            "post",
+            post_id=comment["post_id"]
+        )
+    )
+
+
+# =========================================================
+# DELETE OWN COMMENT
+# =========================================================
+
+@app.route(
+    "/comment/<int:comment_id>/delete",
+    methods=["POST"]
+)
+def delete_own_comment(comment_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    conn = get_db()
+
+
+    comment = conn.execute("""
+        SELECT
+            id,
+            post_id,
+            user_id
+        FROM comments
+        WHERE id = ?
+    """, (
+        comment_id,
+    )).fetchone()
+
+
+    if comment is None:
+
+        conn.close()
+
+        return "Comment not found", 404
+
+
+    if comment["user_id"] != session["user_id"]:
+
+        conn.close()
+
+        return (
+            "You are not allowed to delete this comment.",
+            403
+        )
+
+
+    post_id = comment["post_id"]
+
+
+    conn.execute("""
+        UPDATE comments
+        SET parent_id = NULL
+        WHERE parent_id = ?
+    """, (
+        comment_id,
+    ))
+
+
+    conn.execute("""
+        DELETE FROM comment_likes
+        WHERE comment_id = ?
+    """, (
+        comment_id,
+    ))
+
+
+    conn.execute("""
+        DELETE FROM comments
+        WHERE id = ?
+        AND user_id = ?
+    """, (
+        comment_id,
+        session["user_id"]
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for(
+            "post",
+            post_id=post_id
+        )
+    )
+
+
+# =========================================================
+# EDIT POST
+# =========================================================
+
+@app.route(
+    "/edit/<int:post_id>",
+    methods=["GET", "POST"]
+)
+def edit_post(post_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    conn = get_db()
+
+
+    post = conn.execute("""
+        SELECT *
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+
+    if post is None:
+
+        conn.close()
+
+        return "Post not found", 404
+
+
+    if post["author"] != session["username"]:
+
+        conn.close()
+
+        return (
+            "You are not allowed to edit this post.",
+            403
+        )
+
+
+    if request.method == "POST":
+
+        title = request.form[
+            "title"
+        ].strip()
+
+        content = request.form[
+            "content"
+        ].strip()
+
+        category = request.form.get(
+            "category",
+            "General"
+        ).strip()
+
+
+        if not title or not content:
+
+            conn.close()
+
+            return "Title and content are required."
+
+
+        if category not in CATEGORIES:
+
+            category = "General"
+
+
+        conn.execute("""
+            UPDATE posts
+            SET
+                title = ?,
+                content = ?,
+                category = ?
+            WHERE id = ?
+        """, (
+            title,
+            content,
+            category,
+            post_id
+        ))
+
+
+        conn.commit()
+
+        conn.close()
+
+
+        return redirect(
+            url_for(
+                "post",
+                post_id=post_id
+            )
+        )
+
+
+    conn.close()
+
+
+    return render_template(
+        "edit_post.html",
+        post=post,
+        categories=CATEGORIES
+    )
+
+
+# =========================================================
+# DELETE POST
+# =========================================================
+
+@app.route(
+    "/delete/<int:post_id>",
+    methods=["POST"]
+)
+def delete_post(post_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    conn = get_db()
+
+
+    post = conn.execute("""
+        SELECT *
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+
+    if post is None:
+
+        conn.close()
+
+        return "Post not found", 404
+
+
+    if post["author"] != session["username"]:
+
+        conn.close()
+
+        return (
+            "You are not allowed to delete this post.",
+            403
+        )
+
+
+    # Delete media files
+
+    delete_post_media_files(
+        conn,
+        post_id
+    )
+
+
+    # Delete comment likes
+
+    conn.execute("""
+        DELETE FROM comment_likes
+        WHERE comment_id IN (
+            SELECT id
+            FROM comments
+            WHERE post_id = ?
+        )
+    """, (
+        post_id,
+    ))
+
+
+    # Delete comments
+
+    conn.execute("""
+        DELETE FROM comments
+        WHERE post_id = ?
+    """, (
+        post_id,
+    ))
+
+
+    # Delete post likes
+
+    conn.execute("""
+        DELETE FROM post_likes
+        WHERE post_id = ?
+    """, (
+        post_id,
+    ))
+
+
+    # Delete notifications
+
+    conn.execute("""
+        DELETE FROM notifications
+        WHERE post_id = ?
+    """, (
+        post_id,
+    ))
+
+
+    # Delete post
+
+    conn.execute("""
+        DELETE FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for("home")
+    )
+
+
+# =========================================================
+# PROFILE
+# =========================================================
+
+@app.route("/profile/<username>")
+def profile(username):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int
+    )
+
+    if page < 1:
+        page = 1
+
+    per_page = 5
+
+    offset = (page - 1) * per_page
+
+    conn = get_db()
+
+
+    user = conn.execute("""
+        SELECT *
+        FROM users
+        WHERE username = ?
+    """, (
+        username,
+    )).fetchone()
+
+
+    if user is None:
+
+        conn.close()
+
+        return "User not found", 404
+
+
+    total_posts = conn.execute("""
+        SELECT COUNT(*)
+        FROM posts
+        WHERE author = ?
+    """, (
+        username,
+    )).fetchone()[0]
+
+
+    total_pages = (
+        (total_posts + per_page - 1)
+        // per_page
+    )
+
+
+    posts = conn.execute("""
+        SELECT *
+        FROM posts
+        WHERE author = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        OFFSET ?
+    """, (
+        username,
+        per_page,
+        offset
+    )).fetchall()
+
+
+    total_likes = conn.execute("""
+        SELECT COALESCE(
+            SUM(likes),
+            0
+        )
+        FROM posts
+        WHERE author = ?
+    """, (
+        username,
+    )).fetchone()[0]
+
+
+    total_views = conn.execute("""
+        SELECT COALESCE(
+            SUM(views),
+            0
+        )
+        FROM posts
+        WHERE author = ?
+    """, (
+        username,
+    )).fetchone()[0]
+
+
+    conn.close()
+
+
+    return render_template(
+        "profile.html",
+        user=user,
+        posts=posts,
+        total_posts=total_posts,
+        total_likes=total_likes,
+        total_views=total_views,
+        page=page,
+        total_pages=total_pages
+    )
+
+
+# =========================================================
+# EDIT PROFILE
+# =========================================================
+
+@app.route(
+    "/profile/<username>/edit",
+    methods=["GET", "POST"]
+)
+def edit_profile(username):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+
+    if username != session.get("username"):
+
+        return "Unauthorized", 403
+
+
+    conn = get_db()
+
+
+    user = conn.execute("""
+        SELECT *
+        FROM users
+        WHERE id = ?
+    """, (
+        session["user_id"],
+    )).fetchone()
+
+
+    if user is None:
+
+        conn.close()
+
+        return "User not found", 404
+
+
+    if request.method == "POST":
+
+        new_username = request.form[
+            "username"
+        ].strip()
+
+        new_email = request.form[
+            "email"
+        ].strip()
+
+
+        if not new_username or not new_email:
+
+            conn.close()
+
+            return (
+                "Username and email are required."
+            )
+
+
+        existing_username = conn.execute("""
+            SELECT id
+            FROM users
+            WHERE username = ?
+            AND id != ?
+        """, (
+            new_username,
+            session["user_id"]
+        )).fetchone()
+
+
+        if existing_username:
+
+            conn.close()
+
+            return "Username already exists."
+
+
+        existing_email = conn.execute("""
+            SELECT id
+            FROM users
+            WHERE email = ?
+            AND id != ?
+        """, (
+            new_email,
+            session["user_id"]
+        )).fetchone()
+
+
+        if existing_email:
+
+            conn.close()
+
+            return "Email already exists."
+
+
+        conn.execute("""
+            UPDATE users
+            SET
+                username = ?,
+                email = ?
+            WHERE id = ?
+        """, (
+            new_username,
+            new_email,
+            session["user_id"]
+        ))
+
+
+        conn.commit()
+
+        conn.close()
+
+
+        session["username"] = new_username
+
+
+        return redirect(
+            url_for(
+                "profile",
+                username=new_username
+            )
+        )
+
+
+    conn.close()
+
+
+    return render_template(
+        "edit_profile.html",
+        user=user
+    )
+
+
+# =========================================================
+# UPLOAD / CHANGE PROFILE PICTURE
+# =========================================================
+
+@app.route(
+    "/profile/<username>/picture",
+    methods=["POST"]
+)
+def upload_profile_picture(username):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+
+    if username != session.get("username"):
+
+        return "Unauthorized", 403
+
+
+    file = request.files.get(
+        "profile_picture"
+    )
+
+
+    if not file or not file.filename:
+
+        return "Please select a profile picture."
+
+
+    if not allowed_profile_picture(
+        file.filename
+    ):
+
+        return (
+            "Invalid image type. "
+            "Use JPG, JPEG, PNG, GIF or WEBP."
+        )
+
+
+    extension = file.filename.rsplit(
+        ".",
+        1
+    )[1].lower()
+
+
+    filename = (
+        str(uuid.uuid4())
+        + "."
+        + extension
+    )
+
+
+    safe_filename = secure_filename(
+        filename
+    )
+
+
+    file_path = os.path.join(
+        PROFILE_FOLDER,
+        safe_filename
+    )
+
+
+    conn = get_db()
+
+
+    user = conn.execute("""
+        SELECT profile_picture
+        FROM users
+        WHERE id = ?
+    """, (
+        session["user_id"],
+    )).fetchone()
+
+
+    if user is None:
+
+        conn.close()
+
+        return "User not found", 404
+
+
+    old_picture = user["profile_picture"]
+
+
+    if old_picture:
+
+        old_path = os.path.join(
+            PROFILE_FOLDER,
+            old_picture
+        )
+
+
+        if os.path.exists(old_path):
+
+            try:
+                os.remove(old_path)
+
+            except OSError:
+                pass
+
+
+    file.save(file_path)
+
+
+    conn.execute("""
+        UPDATE users
+        SET profile_picture = ?
+        WHERE id = ?
+    """, (
+        safe_filename,
+        session["user_id"]
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for(
+            "profile",
+            username=username
+        )
+    )
+
+
+# =========================================================
+# USER CHANGE PASSWORD
+# =========================================================
+
+@app.route(
+    "/profile/<username>/change-password",
+    methods=["GET", "POST"]
+)
+def change_user_password(username):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+
+    if username != session.get("username"):
+
+        return "Unauthorized", 403
+
+
+    if request.method == "POST":
+
+        current_password = request.form[
+            "current_password"
+        ]
+
+        new_password = request.form[
+            "new_password"
+        ]
+
+        confirm_password = request.form[
+            "confirm_password"
+        ]
+
+
+        if (
+            not current_password
+            or not new_password
+            or not confirm_password
+        ):
+
+            return (
+                "All password fields are required."
+            )
+
+
+        if new_password != confirm_password:
+
+            return "New passwords do not match."
+
+
+        if len(new_password) < 8:
+
+            return (
+                "New password must be at least 8 characters."
+            )
+
+
+        conn = get_db()
+
+
+        user = conn.execute("""
+            SELECT *
+            FROM users
+            WHERE id = ?
+        """, (
+            session["user_id"],
+        )).fetchone()
+
+
+        if user is None:
+
+            conn.close()
+
+            session.clear()
+
+            return redirect(
+                url_for("login")
+            )
+
+
+        if not check_password_hash(
+            user["password"],
+            current_password
+        ):
+
+            conn.close()
+
+            return (
+                "Current password is incorrect."
+            )
+
+
+        hashed_password = generate_password_hash(
+            new_password
+        )
+
+
+        conn.execute("""
+            UPDATE users
+            SET password = ?
+            WHERE id = ?
+        """, (
+            hashed_password,
+            session["user_id"]
+        ))
+
+
+        conn.commit()
+
+        conn.close()
+
+
+        return redirect(
+            url_for(
+                "profile",
+                username=session["username"]
+            )
+        )
+
+
+    return render_template(
+        "change_user_password.html",
+        username=username
+    )
+
+
+# =========================================================
+# SEARCH
+# =========================================================
+
+@app.route("/search")
+def search():
+
+    search_query = request.args.get(
+        "q",
+        ""
+    ).strip()
+
+    category = request.args.get(
+        "category",
+        ""
+    ).strip()
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int
+    )
+
+    if page < 1:
+        page = 1
+
+    per_page = 8
+
+    offset = (page - 1) * per_page
+
+    conn = get_db()
+
+
+    conditions = []
+
+    params = []
+
+
+    if search_query:
+
+        conditions.append("""
+            (
+                title LIKE ?
+                OR content LIKE ?
+                OR author LIKE ?
+            )
+        """)
+
+        search_value = f"%{search_query}%"
+
+        params.extend([
+            search_value,
+            search_value,
+            search_value
+        ])
+
+
+    if category:
+
+        conditions.append(
+            "category = ?"
+        )
+
+        params.append(category)
+
+
+    where_clause = ""
+
+
+    if conditions:
+
+        where_clause = (
+            "WHERE "
+            + " AND ".join(conditions)
+        )
+
+
+    total_posts = conn.execute(
+        f"""
+        SELECT COUNT(*)
+        FROM posts
+        {where_clause}
+        """,
+        params
+    ).fetchone()[0]
+
+
+    total_pages = (
+        (total_posts + per_page - 1)
+        // per_page
+    )
+
+
+    posts = conn.execute(
+        f"""
+        SELECT *
+        FROM posts
+        {where_clause}
+        ORDER BY created_at DESC
+        LIMIT ?
+        OFFSET ?
+        """,
+        params + [
+            per_page,
+            offset
+        ]
+    ).fetchall()
+
+
+    conn.close()
+
+
+    return render_template(
+        "search.html",
+        posts=posts,
+        search_query=search_query,
+        category=category,
+        categories=CATEGORIES,
+        page=page,
+        total_pages=total_pages,
+        total_posts=total_posts
+    )
+
+
+# =========================================================
+# CATEGORY
+# =========================================================
+
+@app.route(
+    "/category/<category_name>"
+)
+def category(category_name):
+
+    if category_name not in CATEGORIES:
+
+        return "Category not found", 404
+
+
+    conn = get_db()
+
+
+    posts = conn.execute("""
+        SELECT *
+        FROM posts
+        WHERE category = ?
+        ORDER BY created_at DESC
+    """, (
+        category_name,
+    )).fetchall()
+
+
+    conn.close()
+
+
+    return render_template(
+        "category.html",
+        posts=posts,
+        category=category_name
+    )
+
+
+# =========================================================
+# ADMIN LOGIN
+# =========================================================
+
+@app.route(
+    "/admin/login",
+    methods=["GET", "POST"]
+)
+def admin_login():
+
+    if request.method == "POST":
+
+        username = request.form[
+            "username"
+        ].strip()
+
+        password = request.form[
+            "password"
+        ]
+
+
+        conn = get_db()
+
+
+        admin = conn.execute("""
+            SELECT *
+            FROM admins
+            WHERE username = ?
+        """, (
+            username,
+        )).fetchone()
+
+
+        conn.close()
+
+
+        if admin and check_password_hash(
+            admin["password"],
+            password
+        ):
+
+            session["admin_id"] = admin["id"]
+
+            session["admin_username"] = (
+                admin["username"]
+            )
+
+
+            return redirect(
+                url_for("admin_dashboard")
+            )
+
+
+        return (
+            "Invalid admin username or password."
+        )
+
+
+    return render_template(
+        "admin_login.html"
+    )
+
+
+# =========================================================
+# ADMIN DASHBOARD
+# =========================================================
+
+@app.route("/admin/dashboard")
+def admin_dashboard():
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int
+    )
+
+
+    if page < 1:
+        page = 1
+
+
+    per_page = 5
+
+    offset = (page - 1) * per_page
+
+
+    search = request.args.get(
+        "search",
+        ""
+    ).strip()
+
+
+    category = request.args.get(
+        "category",
+        ""
+    ).strip()
+
+
+    conn = get_db()
+
+
+    total_users = conn.execute("""
+        SELECT COUNT(*)
+        FROM users
+    """).fetchone()[0]
+
+
+    total_comments = conn.execute("""
+        SELECT COUNT(*)
+        FROM comments
+    """).fetchone()[0]
+
+
+    total_likes = conn.execute("""
+        SELECT COALESCE(SUM(likes), 0)
+        FROM posts
+    """).fetchone()[0]
+
+
+    total_views = conn.execute("""
+        SELECT COALESCE(SUM(views), 0)
+        FROM posts
+    """).fetchone()[0]
+
+
+    conditions = []
+
+    params = []
+
+
+    if search:
+
+        conditions.append("""
+            (
+                title LIKE ?
+                OR content LIKE ?
+                OR author LIKE ?
+            )
+        """)
+
+
+        search_value = f"%{search}%"
+
+
+        params.extend([
+            search_value,
+            search_value,
+            search_value
+        ])
+
+
+    if category:
+
+        conditions.append(
+            "category = ?"
+        )
+
+        params.append(category)
+
+
+    where_clause = ""
+
+
+    if conditions:
+
+        where_clause = (
+            "WHERE "
+            + " AND ".join(conditions)
+        )
+
+
+    total_posts = conn.execute(
+        f"""
+        SELECT COUNT(*)
+        FROM posts
+        {where_clause}
+        """,
+        params
+    ).fetchone()[0]
+
+
+    total_pages = (
+        (total_posts + per_page - 1)
+        // per_page
+    )
+
+
+    posts = conn.execute(
+        f"""
+        SELECT *
+        FROM posts
+        {where_clause}
+        ORDER BY created_at DESC
+        LIMIT ?
+        OFFSET ?
+        """,
+        params + [
+            per_page,
+            offset
+        ]
+    ).fetchall()
+
+
+    most_viewed_posts = conn.execute("""
+        SELECT *
+        FROM posts
+        ORDER BY COALESCE(views, 0) DESC
+        LIMIT 5
+    """).fetchall()
+
+
+    conn.close()
+
+
+    return render_template(
+        "admin_dashboard.html",
+        total_users=total_users,
+        total_posts=total_posts,
+        total_comments=total_comments,
+        total_likes=total_likes,
+        total_views=total_views,
+        posts=posts,
+        most_viewed_posts=most_viewed_posts,
+        categories=CATEGORIES,
+        search=search,
+        selected_category=category,
+        page=page,
+        total_pages=total_pages
+    )
+
+
+# =========================================================
+# ADMIN LOGOUT
+# =========================================================
+
+@app.route("/admin/logout")
+def admin_logout():
+
+    session.pop(
+        "admin_id",
+        None
+    )
+
+    session.pop(
+        "admin_username",
+        None
+    )
+
+
+    return redirect(
+        url_for("admin_login")
+    )
+
+
+# =========================================================
+# ADMIN EDIT POST
+# =========================================================
+
+@app.route(
+    "/admin/edit/<int:post_id>",
+    methods=["GET", "POST"]
+)
+def admin_edit_post(post_id):
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    conn = get_db()
+
+
+    post = conn.execute("""
+        SELECT *
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+
+    if post is None:
+
+        conn.close()
+
+        return "Post not found", 404
+
+
+    if request.method == "POST":
+
+        title = request.form[
+            "title"
+        ].strip()
+
+        content = request.form[
+            "content"
+        ].strip()
+
+        category = request.form.get(
+            "category",
+            "General"
+        ).strip()
+
+
+        if not title or not content:
+
+            conn.close()
+
+            return (
+                "Title and content are required."
+            )
+
+
+        if category not in CATEGORIES:
+
+            category = "General"
+
+
+        conn.execute("""
+            UPDATE posts
+            SET
+                title = ?,
+                content = ?,
+                category = ?
+            WHERE id = ?
+        """, (
+            title,
+            content,
+            category,
+            post_id
+        ))
+
+
+        conn.commit()
+
+        conn.close()
+
+
+        return redirect(
+            url_for("admin_dashboard")
+        )
+
+
+    conn.close()
+
+
+    return render_template(
+        "admin_edit_post.html",
+        post=post,
+        categories=CATEGORIES
+    )
+
+
+# =========================================================
+# ADMIN DELETE POST
+# =========================================================
+
+@app.route(
+    "/admin/delete/<int:post_id>",
+    methods=["POST"]
+)
+def admin_delete_post(post_id):
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    conn = get_db()
+
+
+    post = conn.execute("""
+        SELECT id
+        FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    )).fetchone()
+
+
+    if post is None:
+
+        conn.close()
+
+        return "Post not found", 404
+
+
+    # Delete media
+
+    delete_post_media_files(
+        conn,
+        post_id
+    )
+
+
+    # Delete comment likes
+
+    conn.execute("""
+        DELETE FROM comment_likes
+        WHERE comment_id IN (
+            SELECT id
+            FROM comments
+            WHERE post_id = ?
+        )
+    """, (
+        post_id,
+    ))
+
+
+    # Delete comments
+
+    conn.execute("""
+        DELETE FROM comments
+        WHERE post_id = ?
+    """, (
+        post_id,
+    ))
+
+
+    # Delete post likes
+
+    conn.execute("""
+        DELETE FROM post_likes
+        WHERE post_id = ?
+    """, (
+        post_id,
+    ))
+
+
+    # Delete notifications
+
+    conn.execute("""
+        DELETE FROM notifications
+        WHERE post_id = ?
+    """, (
+        post_id,
+    ))
+
+
+    # Delete post
+
+    conn.execute("""
+        DELETE FROM posts
+        WHERE id = ?
+    """, (
+        post_id,
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for("admin_dashboard")
+    )
+
+
+# =========================================================
+# ADMIN USERS
+# =========================================================
+
+@app.route("/admin/users")
+def admin_users():
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int
+    )
+
+
+    if page < 1:
+        page = 1
+
+
+    per_page = 10
+
+    offset = (page - 1) * per_page
+
+
+    conn = get_db()
+
+
+    total_users = conn.execute("""
+        SELECT COUNT(*)
+        FROM users
+    """).fetchone()[0]
+
+
+    total_pages = (
+        (total_users + per_page - 1)
+        // per_page
+    )
+
+
+    users = conn.execute("""
+        SELECT
+            id,
+            username,
+            email,
+            profile_picture,
+            created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT ?
+        OFFSET ?
+    """, (
+        per_page,
+        offset
+    )).fetchall()
+
+
+    conn.close()
+
+
+    return render_template(
+        "admin_users.html",
+        users=users,
+        page=page,
+        total_pages=total_pages
+    )
+
+
+# =========================================================
+# ADMIN DELETE USER
+# =========================================================
+
+@app.route(
+    "/admin/users/delete/<int:user_id>",
+    methods=["POST"]
+)
+def admin_delete_user(user_id):
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    conn = get_db()
+
+
+    user = conn.execute("""
+        SELECT *
+        FROM users
+        WHERE id = ?
+    """, (
+        user_id,
+    )).fetchone()
+
+
+    if user is None:
+
+        conn.close()
+
+        return "User not found", 404
+
+
+    conn.execute("""
+        UPDATE comments
+        SET parent_id = NULL
+        WHERE parent_id IN (
+            SELECT id
+            FROM comments
+            WHERE user_id = ?
+        )
+    """, (
+        user_id,
+    ))
+
+
+    conn.execute("""
+        DELETE FROM comment_likes
+        WHERE user_id = ?
+        OR comment_id IN (
+            SELECT id
+            FROM comments
+            WHERE user_id = ?
+        )
+    """, (
+        user_id,
+        user_id
+    ))
+
+
+    conn.execute("""
+        DELETE FROM post_likes
+        WHERE user_id = ?
+    """, (
+        user_id,
+    ))
+
+
+    conn.execute("""
+        DELETE FROM notifications
+        WHERE user_id = ?
+    """, (
+        user_id,
+    ))
+
+
+    conn.execute("""
+        DELETE FROM comments
+        WHERE user_id = ?
+    """, (
+        user_id,
+    ))
+
+
+    profile_picture = user["profile_picture"]
+
+
+    if profile_picture:
+
+        picture_path = os.path.join(
+            PROFILE_FOLDER,
+            profile_picture
+        )
+
+
+        if os.path.exists(picture_path):
+
+            try:
+                os.remove(picture_path)
+
+            except OSError:
+                pass
+
+
+    conn.execute("""
+        DELETE FROM users
+        WHERE id = ?
+    """, (
+        user_id,
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    return redirect(
+        url_for("admin_users")
+    )
+
+
+# =========================================================
+# ADMIN COMMENT MANAGEMENT
+# =========================================================
 
 @app.route("/admin/comments")
 def admin_comments():
 
-    if not admin_required():
-        return "Access denied. Admins only.", 403
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    page = request.args.get(
+        "page",
+        1,
+        type=int
+    )
+
+
+    if page < 1:
+        page = 1
+
+
+    per_page = 10
+
+    offset = (page - 1) * per_page
+
 
     conn = get_db()
+
+
+    total_comments = conn.execute("""
+        SELECT COUNT(*)
+        FROM comments
+    """).fetchone()[0]
+
+
+    total_pages = (
+        (total_comments + per_page - 1)
+        // per_page
+    )
+
 
     comments = conn.execute("""
         SELECT
             comments.id,
             comments.content,
             comments.created_at,
+            comments.parent_id,
             users.username,
-            posts.title,
-            posts.id AS post_id
+            posts.id AS post_id,
+            posts.title AS post_title
 
         FROM comments
 
         JOIN users
-            ON comments.user_id = users.id
+        ON comments.user_id = users.id
 
         JOIN posts
-            ON comments.post_id = posts.id
+        ON comments.post_id = posts.id
 
         ORDER BY comments.created_at DESC
-    """).fetchall()
+
+        LIMIT ?
+        OFFSET ?
+
+    """, (
+        per_page,
+        offset
+    )).fetchall()
+
 
     conn.close()
 
+
     return render_template(
         "admin_comments.html",
-        comments=comments
+        comments=comments,
+        page=page,
+        total_pages=total_pages
     )
-    
-    
-# =========================
-# DELETE COMMENT
-# =========================
+
+
+# =========================================================
+# ADMIN DELETE COMMENT
+# =========================================================
 
 @app.route(
     "/admin/comments/delete/<int:comment_id>",
     methods=["POST"]
 )
-def delete_comment(comment_id):
+def admin_delete_comment(comment_id):
 
-    if not admin_required():
-        return "Access denied. Admins only.", 403
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
 
     conn = get_db()
+
+
+    comment = conn.execute("""
+        SELECT id
+        FROM comments
+        WHERE id = ?
+    """, (
+        comment_id,
+    )).fetchone()
+
+
+    if comment is None:
+
+        conn.close()
+
+        return "Comment not found", 404
+
+
+    conn.execute("""
+        UPDATE comments
+        SET parent_id = NULL
+        WHERE parent_id = ?
+    """, (
+        comment_id,
+    ))
+
+
+    conn.execute("""
+        DELETE FROM comment_likes
+        WHERE comment_id = ?
+    """, (
+        comment_id,
+    ))
+
 
     conn.execute("""
         DELETE FROM comments
         WHERE id = ?
-    """, (comment_id,))
+    """, (
+        comment_id,
+    ))
+
 
     conn.commit()
+
     conn.close()
 
-    return redirect("/admin/comments")
-    
-    
-# ========================
-# LIKE ROUTE
-# ========================
 
-@app.route("/post/<int:post_id>/like", methods=["POST"])
-def like_post(post_id):
+    return redirect(
+        url_for("admin_comments")
+    )
 
-    # User must be logged in
-    if not session.get("user_id"):
-        return redirect("/login")
+
+# =========================================================
+# CREATE FIRST ADMIN
+# =========================================================
+
+def create_admin():
+
+    conn = get_db()
+
+
+    admin = conn.execute("""
+        SELECT id
+        FROM admins
+        WHERE username = ?
+    """, (
+        "admin",
+    )).fetchone()
+
+
+    if admin is None:
+
+        password = "Admin@12345"
+
+        hashed_password = generate_password_hash(
+            password
+        )
+
+
+        conn.execute("""
+            INSERT INTO admins
+            (
+                username,
+                password
+            )
+            VALUES (?, ?)
+        """, (
+            "admin",
+            hashed_password
+        ))
+
+
+        conn.commit()
+
+
+        print(
+            "================================="
+        )
+
+        print(
+            "ADMIN ACCOUNT CREATED"
+        )
+
+        print(
+            "Username: admin"
+        )
+
+        print(
+            "Password: Admin@12345"
+        )
+
+        print(
+            "================================="
+        )
+
+
+    conn.close()
+
+
+# =========================================================
+# ADMIN CHANGE PASSWORD
+# =========================================================
+
+@app.route(
+    "/admin/change-password",
+    methods=["GET", "POST"]
+)
+def admin_change_password():
+
+    if "admin_id" not in session:
+
+        return redirect(
+            url_for("admin_login")
+        )
+
+
+    if request.method == "POST":
+
+        current_password = request.form[
+            "current_password"
+        ]
+
+        new_password = request.form[
+            "new_password"
+        ]
+
+        confirm_password = request.form[
+            "confirm_password"
+        ]
+
+
+        if (
+            not current_password
+            or not new_password
+            or not confirm_password
+        ):
+
+            return (
+                "All password fields are required."
+            )
+
+
+        if new_password != confirm_password:
+
+            return "New passwords do not match."
+
+
+        if len(new_password) < 8:
+
+            return (
+                "New password must be at least 8 characters."
+            )
+
+
+        conn = get_db()
+
+
+        admin = conn.execute("""
+            SELECT *
+            FROM admins
+            WHERE id = ?
+        """, (
+            session["admin_id"],
+        )).fetchone()
+
+
+        if admin is None:
+
+            conn.close()
+
+
+            session.pop(
+                "admin_id",
+                None
+            )
+
+
+            session.pop(
+                "admin_username",
+                None
+            )
+
+
+            return redirect(
+                url_for("admin_login")
+            )
+
+
+        if not check_password_hash(
+            admin["password"],
+            current_password
+        ):
+
+            conn.close()
+
+            return (
+                "Current password is incorrect."
+            )
+
+
+        hashed_password = generate_password_hash(
+            new_password
+        )
+
+
+        conn.execute("""
+            UPDATE admins
+            SET password = ?
+            WHERE id = ?
+        """, (
+            hashed_password,
+            session["admin_id"]
+        ))
+
+
+        conn.commit()
+
+        conn.close()
+
+
+        return redirect(
+            url_for("admin_dashboard")
+        )
+
+
+    return render_template(
+        "admin_change_password.html"
+    )
+
+
+# =========================================================
+# NOTIFICATIONS
+# =========================================================
+
+@app.route("/notifications")
+def notifications():
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+
+    conn = get_db()
+
+
+    notification_list = conn.execute("""
+        SELECT *
+        FROM notifications
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+    """, (
+        session["user_id"],
+    )).fetchall()
+
+
+    conn.close()
+
+
+    return render_template(
+        "notifications.html",
+        notifications=notification_list
+    )
+
+
+# =========================================================
+# MARK NOTIFICATION AS READ
+# =========================================================
+
+@app.route(
+    "/notifications/read/<int:notification_id>",
+    methods=["POST"]
+)
+def mark_notification_read(notification_id):
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
+
+    conn = get_db()
+
+
+    notification = conn.execute("""
+        SELECT
+            id,
+            post_id
+        FROM notifications
+        WHERE id = ?
+        AND user_id = ?
+    """, (
+        notification_id,
+        session["user_id"]
+    )).fetchone()
+
+
+    if notification is None:
+
+        conn.close()
+
+        return "Notification not found", 404
+
+
+    conn.execute("""
+        UPDATE notifications
+        SET is_read = 1
+        WHERE id = ?
+        AND user_id = ?
+    """, (
+        notification_id,
+        session["user_id"]
+    ))
+
+
+    conn.commit()
+
+    conn.close()
+
+
+    if notification["post_id"]:
+
+        return redirect(
+            url_for(
+                "post",
+                post_id=notification["post_id"]
+            )
+        )
+
+
+    return redirect(
+        url_for("notifications")
+    )
+
+
+# =========================================================
+# NOTIFICATION CONTEXT PROCESSOR
+# =========================================================
+
+@app.context_processor
+def inject_notifications():
+
+    return {
+        "notification_count":
+            get_notification_count()
+    }
+
+
+# =========================================================
+# USER DASHBOARD
+# =========================================================
+
+@app.route("/dashboard")
+def user_dashboard():
+
+    if "user_id" not in session:
+
+        return redirect(
+            url_for("login")
+        )
+
 
     user_id = session["user_id"]
 
     conn = get_db()
 
-    # Check if this user already liked the post
-    existing_like = conn.execute("""
-        SELECT id
-        FROM likes
-        WHERE post_id = ?
-        AND user_id = ?
-    """, (post_id, user_id)).fetchone()
 
-    if existing_like:
-
-        # Remove the like
-        conn.execute("""
-            DELETE FROM likes
-            WHERE post_id = ?
-            AND user_id = ?
-        """, (post_id, user_id))
-
-    else:
-
-        # Add the like
-        conn.execute("""
-            INSERT INTO likes
-            (post_id, user_id)
-            VALUES (?, ?)
-        """, (post_id, user_id))
-
-    conn.commit()
-    conn.close()
-
-    return redirect(f"/post/{post_id}")
-    
-    
-# ======================
-# PROFILE ROUE
-# ======================
-
-@app.route("/profile")
-def profile():
-
-    if not session.get("user_id"):
-        return redirect("/login")
-
-    conn = get_db()
-
-    user = conn.execute("""
-        SELECT
-            id,
-            username,
-            email,
-            created_at
-        FROM users
-        WHERE id = ?
-    """, (session["user_id"],)).fetchone()
-
-    comments = conn.execute("""
-        SELECT
-            comments.content,
-            comments.created_at,
-            posts.title,
-            posts.id AS post_id
-        FROM comments
-        JOIN posts
-            ON comments.post_id = posts.id
-        WHERE comments.user_id = ?
-        ORDER BY comments.created_at DESC
-    """, (session["user_id"],)).fetchall()
-
-    conn.close()
-
-    if user is None:
-        session.clear()
-        return redirect("/login")
-
-    return render_template(
-        "profile.html",
-        user=user,
-        comments=comments
-    )
-    
-    
-# ====================
-# EDIT PROFILE
-# ====================
-
-@app.route("/edit-profile", methods=["GET", "POST"])
-def edit_profile():
-
-    if not session.get("user_id"):
-        return redirect("/login")
-
-    conn = get_db()
-
-    user = conn.execute("""
+    user = conn.execute(
+        """
         SELECT *
         FROM users
         WHERE id = ?
-    """, (session["user_id"],)).fetchone()
+        """,
+        (user_id,)
+    ).fetchone()
 
-    if user is None:
+
+    if not user:
+
         conn.close()
+
         session.clear()
-        return redirect("/login")
 
-    if request.method == "POST":
+        return redirect(
+            url_for("login")
+        )
 
-        username = request.form["username"].strip()
-        email = request.form["email"].strip()
-        password = request.form["password"]
 
-        if not username or not email:
-            conn.close()
-            return "Username and email are required."
+    # =====================================================
+    # USER POST COUNT
+    # =====================================================
 
-        try:
+    total_posts = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM posts
+        WHERE author = ?
+        """,
+        (user["username"],)
+    ).fetchone()[0]
 
-            if password.strip():
 
-                password_hash = generate_password_hash(password)
+    # =====================================================
+    # TOTAL LIKES
+    # =====================================================
 
-                conn.execute("""
-                    UPDATE users
-                    SET username = ?,
-                        email = ?,
-                        password = ?
-                    WHERE id = ?
-                """, (
-                    username,
-                    email,
-                    password_hash,
-                    session["user_id"]
-                ))
+    total_likes = conn.execute(
+        """
+        SELECT COALESCE(SUM(likes), 0)
+        FROM posts
+        WHERE author = ?
+        """,
+        (user["username"],)
+    ).fetchone()[0]
 
-            else:
 
-                conn.execute("""
-                    UPDATE users
-                    SET username = ?,
-                        email = ?
-                    WHERE id = ?
-                """, (
-                    username,
-                    email,
-                    session["user_id"]
-                ))
+    # =====================================================
+    # TOTAL VIEWS
+    # =====================================================
 
-            conn.commit()
+    total_views = conn.execute(
+        """
+        SELECT COALESCE(SUM(views), 0)
+        FROM posts
+        WHERE author = ?
+        """,
+        (user["username"],)
+    ).fetchone()[0]
 
-        except sqlite3.IntegrityError:
 
-            conn.close()
+    # =====================================================
+    # TOTAL COMMENTS
+    # =====================================================
 
-            return "Username or email already exists."
+    total_comments = conn.execute(
+        """
+        SELECT COUNT(*)
+        FROM comments
+        WHERE user_id = ?
+        """,
+        (user_id,)
+    ).fetchone()[0]
 
-        conn.close()
 
-        # Update the session username
-        session["username"] = username
+    # =====================================================
+    # RECENT POSTS
+    # =====================================================
 
-        return redirect("/profile")
+    posts = conn.execute(
+        """
+        SELECT *
+        FROM posts
+        WHERE author = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+        """,
+        (user["username"],)
+    ).fetchall()
+
+
+    # =====================================================
+    # RECENT NOTIFICATIONS
+    # =====================================================
+
+    notifications = conn.execute(
+        """
+        SELECT *
+        FROM notifications
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 5
+        """,
+        (user_id,)
+    ).fetchall()
+
+
+    # =====================================================
+    # RECENT COMMENTS
+    # =====================================================
+
+    recent_comments = conn.execute(
+        """
+        SELECT
+            comments.*,
+            posts.title AS post_title
+
+        FROM comments
+
+        JOIN posts
+        ON comments.post_id = posts.id
+
+        WHERE comments.user_id = ?
+
+        ORDER BY comments.created_at DESC
+
+        LIMIT 5
+        """,
+        (user_id,)
+    ).fetchall()
+
 
     conn.close()
+
 
     return render_template(
-        "edit_profile.html",
-        user=user
+        "user_dashboard.html",
+
+        user=user,
+
+        total_posts=total_posts,
+
+        total_likes=total_likes,
+
+        total_views=total_views,
+
+        total_comments=total_comments,
+
+        posts=posts,
+
+        notifications=notifications,
+
+        recent_comments=recent_comments
     )
-    
-    
-# ================
-# UPLOADS
-# ================
-
-@app.route("/uploads/<filename>")
-def uploaded_file(filename):
-
-    return send_from_directory(
-        app.config["UPLOAD_FOLDER"],
-        filename
-    )
 
 
-# =================
-# FEACTURE
-# ==================
-
-@app.route("/feature-post/<int:post_id>")
-def feature_post(post_id):
-
-    if not admin_required():
-        return "Access denied. Admins only.", 403
-
-    conn = get_db()
-
-    conn.execute("""
-        UPDATE posts
-        SET featured = 1
-        WHERE id = ?
-    """, (post_id,))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/admin")
-    
-    
-#=====================
-# UNFEATURE
-#======================
-
-@app.route("/unfeature-post/<int:post_id>")
-def unfeature_post(post_id):
-
-    if not admin_required():
-        return "Access denied. Admins only.", 403
-
-    conn = get_db()
-
-    conn.execute("""
-        UPDATE posts
-        SET featured = 0
-        WHERE id = ?
-    """, (post_id,))
-
-    conn.commit()
-    conn.close()
-
-    return redirect("/admin")
-
-
-# =========================
+# =========================================================
 # START APPLICATION
-# =========================
-
-# Initialize database when the application starts
-init_db()
-add_missing_columns()
-
+# =========================================================
 
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    init_db()
+
+    create_admin()
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True
+    )
