@@ -1,69 +1,140 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
 
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
     <title>Register - My Blog</title>
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f4f4;
+            margin: 0;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 450px;
+            margin: 60px auto;
+        }
+
+        .box {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 20px;
+            padding: 12px;
+            background: #222;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        p {
+            text-align: center;
+        }
+
+        a {
+            color: #222;
+        }
+
+    </style>
 
 </head>
 
+
 <body>
 
-<header>
+<div class="container">
 
-    <h1>My Blog</h1>
+    <div class="box">
 
-    <nav>
-        <a href="/">Home</a>
-        <a href="/login">Login</a>
-    </nav>
+        <h1>Create Account</h1>
 
-</header>
+        <form method="POST">
 
+            <label>
+                Username
+            </label>
 
-<main>
-
-    <h2>Create Account</h2>
-
-    <form method="POST">
-
-        <label>Username</label>
-
-        <input
-            type="text"
-            name="username"
-            required
-        >
+            <input
+                type="text"
+                name="username"
+                required
+            >
 
 
-        <label>Email</label>
+            <label>
+                Email
+            </label>
 
-        <input
-            type="email"
-            name="email"
-            required
-        >
-
-
-        <label>Password</label>
-
-        <input
-            type="password"
-            name="password"
-            required
-        >
+            <input
+                type="email"
+                name="email"
+                required
+            >
 
 
-        <button type="submit">
-            Register
-        </button>
+            <label>
+                Password
+            </label>
 
-    </form>
+            <input
+                type="password"
+                name="password"
+                required
+            >
 
-</main>
+
+            <button type="submit">
+                Register
+            </button>
+
+        </form>
+
+
+        <p>
+            Already have an account?
+            <a href="/login">Login</a>
+        </p>
+
+    </div>
+
+</div>
 
 </body>
 
