@@ -1,74 +1,57 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
+{% block title %}Search - My Blog{% endblock %}
 
-    <meta charset="UTF-8">
+{% block content %}
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+<div class="container">
 
-    <title>Search - My Blog</title>
+    <h1>🔎 Search Posts</h1>
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
+    <form method="GET" action="{{ url_for('search') }}">
 
-</head>
+        <input
+            type="text"
+            name="q"
+            placeholder="Search posts..."
+            value="{{ search_query }}"
+        >
 
-<body>
+        <select name="category">
 
-<header class="site-header">
+            <option value="">
+                All Categories
+            </option>
 
-    <div class="header-container">
+            {% for item in categories %}
 
-        <h1>My Blog</h1>
+                <option
+                    value="{{ item }}"
+                    {% if category == item %}
+                        selected
+                    {% endif %}
+                >
+                    {{ item }}
+                </option>
 
-        <nav>
+            {% endfor %}
 
-            <a href="/">Home</a>
+        </select>
 
-            {% if session.get("user_id") %}
+        <button type="submit">
+            🔎 Search
+        </button>
 
-                <span>
-                    Welcome, {{ session.get("username") }}
-                </span>
+    </form>
 
-                <a href="/logout">Logout</a>
+    <hr>
 
-            {% else %}
-
-                <a href="/login">Login</a>
-
-                <a href="/register">Register</a>
-
-            {% endif %}
-
-            {% if session.get("is_admin") == 1 %}
-
-                <a href="/admin">
-                    Admin Dashboard
-                </a>
-
-            {% endif %}
-
-        </nav>
-
-    </div>
-
-</header>
-
-
-<main class="container">
-
-    <h2>
-        Search Results
-    </h2>
-
-    {% if query %}
+    {% if search_query or category %}
 
         <p>
-            Results for:
-            <strong>{{ query }}</strong>
+            Found
+            <strong>{{ total_posts }}</strong>
+            post(s).
         </p>
 
     {% endif %}
@@ -76,73 +59,124 @@
 
     {% if posts %}
 
-        <div class="posts-grid">
+        {% for post in posts %}
 
-            {% for post in posts %}
+            <div class="post">
 
-                <article class="post-card">
-
-                    <h3>
-                        {{ post["title"] }}
-                    </h3>
-
-                    <p class="post-meta">
-
-                        By {{ post["author"] }}
-
-                        • {{ post["created_at"] }}
-
-                    </p>
-
-                    <p>
-
-                        {{ post["content"][:200] }}...
-
-                    </p>
-
+                <h2>
                     <a
-                        class="read-more"
                         href="{{ url_for(
                             'post',
                             post_id=post['id']
                         ) }}"
                     >
+                        {{ post["title"] }}
+                    </a>
+                </h2>
 
-                        Read More →
+                <p>
+                    📂 {{ post["category"] }}
+                    &nbsp;&nbsp;
+                    👤 {{ post["author"] }}
+                </p>
 
+                <p>
+                    {{ post["content"][:250] }}
+
+                    {% if post["content"]|length > 250 %}
+                        ...
+                    {% endif %}
+                </p>
+
+                <p>
+                    ❤️ {{ post["likes"] or 0 }}
+                    &nbsp;&nbsp;
+                    👁️ {{ post["views"] or 0 }}
+                </p>
+
+                <p>
+                    📅 {{ post["created_at"] }}
+                </p>
+
+            </div>
+
+        {% endfor %}
+
+
+        {% if total_pages > 1 %}
+
+            <div
+                style="
+                    text-align:center;
+                    margin:30px 0;
+                "
+            >
+
+                {% if page > 1 %}
+
+                    <a
+                        class="button"
+                        href="{{ url_for(
+                            'search',
+                            q=search_query,
+                            category=category,
+                            page=page-1
+                        ) }}"
+                    >
+                        ◀️ Previous
                     </a>
 
-                </article>
+                {% endif %}
 
-            {% endfor %}
 
-        </div>
+                <span style="margin:0 15px;">
+
+                    Page
+                    <strong>{{ page }}</strong>
+                    of
+                    <strong>{{ total_pages }}</strong>
+
+                </span>
+
+
+                {% if page < total_pages %}
+
+                    <a
+                        class="button"
+                        href="{{ url_for(
+                            'search',
+                            q=search_query,
+                            category=category,
+                            page=page+1
+                        ) }}"
+                    >
+                        Next ▶️
+                    </a>
+
+                {% endif %}
+
+            </div>
+
+        {% endif %}
+
 
     {% else %}
 
-        <div class="empty">
+        <div class="post">
 
-            <h3>No posts found</h3>
+            <h3>
+                No posts found.
+            </h3>
 
             <p>
-                Try searching for another word.
+                Try a different search term
+                or category.
             </p>
 
         </div>
 
     {% endif %}
 
-</main>
+</div>
 
-
-<footer>
-
-    <p>
-        © 2026 My Blog. All rights reserved.
-    </p>
-
-</footer>
-
-</body>
-
-</html>
+{% endblock %}
