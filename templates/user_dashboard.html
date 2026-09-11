@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+.dashboard-container {
+    max-width: 1000px;
+    margin: 35px auto;
+    padding: 0 15px;
+}
+
+.dashboard-header {
+    background: white;
+    padding: 30px;
+    border-radius: 18px;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.08);
+    margin-bottom: 25px;
+}
+
+.dashboard-header h1 {
+    margin: 0 0 8px;
+}
+
+.dashboard-header p {
+    color: #777;
+    margin: 0;
+}
+
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.dashboard-stat {
+    background: white;
+    padding: 25px 15px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+}
+
+.dashboard-stat-number {
+    display: block;
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 6px;
+}
+
+.dashboard-stat-label {
+    color: #777;
+    font-size: 14px;
+}
+
+.dashboard-section {
+    background: white;
+    padding: 25px;
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+    margin-bottom: 25px;
+}
+
+.dashboard-section h2 {
+    margin-top: 0;
+}
+
+.dashboard-links {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.dashboard-link {
+    display: block;
+    padding: 18px;
+    border-radius: 10px;
+    background: #f5f5f5;
+    color: #222;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.dashboard-link:hover {
+    background: #e9e9e9;
+}
+
+.dashboard-post {
+    padding: 18px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.dashboard-post:last-child {
+    border-bottom: none;
+}
+
+.dashboard-post h3 {
+    margin: 0 0 8px;
+}
+
+.dashboard-post h3 a {
+    color: #222;
+    text-decoration: none;
+}
+
+.dashboard-post h3 a:hover {
+    color: #00bcd4;
+}
+
+.post-meta {
+    color: #888;
+    font-size: 14px;
+}
+
+.post-stats {
+    color: #666;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.notification-item {
+    padding: 15px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-message {
+    margin: 0 0 5px;
+}
+
+.notification-date {
+    color: #999;
+    font-size: 13px;
+}
+
+.empty-message {
+    color: #777;
+    text-align: center;
+    padding: 20px;
+}
+
+.view-all {
+    display: inline-block;
+    margin-top: 15px;
+    text-decoration: none;
+    color: #222;
+    font-weight: bold;
+}
+
+.view-all:hover {
+    color: #00bcd4;
+}
+
+@media (max-width: 700px) {
+
+    .dashboard-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-links {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+@media (max-width: 450px) {
+
+    .dashboard-stats {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+</style>
+
+
+<div class="dashboard-container">
+
+
+    <!-- HEADER -->
+
+    <div class="dashboard-header">
+
+        <h1>
+            👋 Welcome, {{ user.username }}!
+        </h1>
+
+        <p>
+            Manage your account and view your activity.
+        </p>
+
+    </div>
+
+
+    <!-- STATISTICS -->
+
+    <div class="dashboard-stats">
+
+        <div class="dashboard-stat">
+
+            <span class="dashboard-stat-number">
+                {{ total_posts }}
+            </span>
+
+            <span class="dashboard-stat-label">
+                📝 Posts
+            </span>
+
+        </div>
+
+
+        <div class="dashboard-stat">
+
+            <span class="dashboard-stat-number">
+                {{ total_likes }}
+            </span>
+
+            <span class="dashboard-stat-label">
+                ❤️ Likes
+            </span>
+
+        </div>
+
+
+        <div class="dashboard-stat">
+
+            <span class="dashboard-stat-number">
+                {{ total_views }}
+            </span>
+
+            <span class="dashboard-stat-label">
+                👁️ Views
+            </span>
+
+        </div>
+
+
+        <div class="dashboard-stat">
+
+            <span class="dashboard-stat-number">
+                {{ total_comments }}
+            </span>
+
+            <span class="dashboard-stat-label">
+                💬 Comments
+            </span>
+
+        </div>
+
+    </div>
+
+
+    <!-- QUICK ACTIONS -->
+
+    <div class="dashboard-section">
+
+        <h2>
+            ⚡ Quick Actions
+        </h2>
+
+        <div class="dashboard-links">
+
+            <a
+                href="{{ url_for(
+                    'profile',
+                    username=user.username
+                ) }}"
+                class="dashboard-link"
+            >
+                👤 View My Profile
+            </a>
+
+
+            <a
+                href="{{ url_for(
+                    'edit_profile',
+                    username=user.username
+                ) }}"
+                class="dashboard-link"
+            >
+                ✏️ Edit Profile
+            </a>
+
+
+            <a
+                href="{{ url_for(
+                    'change_user_password',
+                    username=user.username
+                ) }}"
+                class="dashboard-link"
+            >
+                🔐 Change Password
+            </a>
+
+
+            <a
+                href="{{ url_for('notifications') }}"
+                class="dashboard-link"
+            >
+                🔔 Notifications
+
+                {% if notification_count and notification_count > 0 %}
+                    ({{ notification_count }})
+                {% endif %}
+
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <!-- RECENT POSTS -->
+
+    <div class="dashboard-section">
+
+        <h2>
+            📝 Recent Posts
+        </h2>
+
+
+        {% if posts %}
+
+            {% for post in posts %}
+
+                <div class="dashboard-post">
+
+                    <h3>
+
+                        <a href="{{ url_for(
+                            'post',
+                            post_id=post.id
+                        ) }}">
+
+                            {{ post.title }}
+
+                        </a>
+
+                    </h3>
+
+
+                    <div class="post-meta">
+
+                        📂 {{ post.category }}
+
+                        &nbsp; • &nbsp;
+
+                        {{ post.created_at }}
+
+                    </div>
+
+
+                    <div class="post-stats">
+
+                        ❤️ {{ post.likes or 0 }}
+
+                        &nbsp;&nbsp;
+
+                        👁️ {{ post.views or 0 }}
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+
+            <a
+                class="view-all"
+                href="{{ url_for(
+                    'profile',
+                    username=user.username
+                ) }}"
+            >
+                View all posts →
+            </a>
+
+
+        {% else %}
+
+            <div class="empty-message">
+
+                <p>
+                    You don't have any posts yet.
+                </p>
+
+            </div>
+
+        {% endif %}
+
+    </div>
+    
+    <!-- ========================= -->
+<!-- RECENT COMMENTS -->
+<!-- ========================= -->
+
+<div class="dashboard-section">
+
+    <h2>
+        💬 My Recent Comments
+    </h2>
+
+    {% if recent_comments %}
+
+        {% for comment in recent_comments %}
+
+            <div class="dashboard-post">
+
+                <p>
+                    {{ comment.content }}
+                </p>
+
+                <div class="post-meta">
+
+                    On:
+                    <a href="{{ url_for(
+                        'post',
+                        post_id=comment.post_id
+                    ) }}">
+
+                        {{ comment.post_title }}
+
+                    </a>
+
+                    &nbsp; • &nbsp;
+
+                    {{ comment.created_at }}
+
+                </div>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="empty-message">
+
+            <p>
+                You haven't made any comments yet.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+
+    <!-- RECENT NOTIFICATIONS -->
+
+    <div class="dashboard-section">
+
+        <h2>
+            🔔 Recent Notifications
+        </h2>
+
+
+        {% if notifications %}
+
+            {% for notification in notifications %}
+
+                <div class="notification-item">
+
+                    <p class="notification-message">
+                        {{ notification.message }}
+                    </p>
+
+                    <div class="notification-date">
+                        {{ notification.created_at }}
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+
+            <a
+                class="view-all"
+                href="{{ url_for('notifications') }}"
+            >
+                View all notifications →
+            </a>
+
+
+        {% else %}
+
+            <div class="empty-message">
+
+                <p>
+                    You have no notifications yet.
+                </p>
+
+            </div>
+
+        {% endif %}
+
+    </div>
+
+
+</div>
+
+{% endblock %}
