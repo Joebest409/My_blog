@@ -1,97 +1,73 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
+{% block title %}
+Comment Management
+{% endblock %}
 
-    <meta charset="UTF-8">
+{% block content %}
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+<h1>💬 Comment Management</h1>
 
-    <title>Manage Comments - My Blog</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
-
-</head>
-
-<body>
-
-<header class="site-header">
-
-    <div class="header-container">
-
-        <h1>My Blog Admin</h1>
-
-        <nav>
-
-            <a href="/">Home</a>
-
-            <a href="/admin">Dashboard</a>
-
-            <a href="/logout">Logout</a>
-
-        </nav>
-
-    </div>
-
-</header>
-
-
-<main class="container">
-
-    <h2>Manage Comments</h2>
-
+<div class="card">
 
     {% if comments %}
 
         {% for comment in comments %}
 
-            <div class="comment">
+            <div style="
+                padding:15px;
+                margin-bottom:15px;
+                border:1px solid #ddd;
+                border-radius:8px;
+            ">
 
                 <h3>
-                    {{ comment["username"] }}
+                    💬 Comment
                 </h3>
 
                 <p>
-                    <strong>Post:</strong>
+                    <strong>
+                        👤 {{ comment['username'] }}
+                    </strong>
+                </p>
+
+                <p>
+                    📝 Post:
 
                     <a href="{{ url_for(
                         'post',
                         post_id=comment['post_id']
                     ) }}">
-
-                        {{ comment["title"] }}
-
+                        {{ comment['post_title'] }}
                     </a>
                 </p>
 
                 <p>
-                    {{ comment["content"] }}
+                    {{ comment['content'] }}
                 </p>
 
                 <small>
-                    {{ comment["created_at"] }}
+                    📅 {{ comment['created_at'] }}
                 </small>
 
+                <br><br>
 
                 <form
-                    method="POST"
                     action="{{ url_for(
-                        'delete_comment',
+                        'admin_delete_comment',
                         comment_id=comment['id']
                     ) }}"
+                    method="POST"
+                    style="display:inline;"
+                    onsubmit="
+                        return confirm(
+                            'Delete this comment?'
+                        );
+                    "
                 >
 
-                    <button
-                        type="submit"
-                        onclick="return confirm(
-                            'Delete this comment?'
-                        )"
-                    >
-
-                        Delete Comment
-
+                    <button type="submit">
+                        🗑️ Delete Comment
                     </button>
 
                 </form>
@@ -102,29 +78,73 @@
 
     {% else %}
 
-        <div class="empty">
-
-            <h3>No comments</h3>
-
-            <p>
-                There are currently no comments.
-            </p>
-
-        </div>
+        <p>
+            No comments found.
+        </p>
 
     {% endif %}
 
-</main>
+</div>
+
+<br>
+
+{% if total_pages > 1 %}
+
+<div style="
+    margin:20px 0;
+    text-align:center;
+">
+
+    {% if page > 1 %}
+
+        <a
+            class="button"
+            href="{{ url_for(
+                'admin_comments',
+                page=page-1
+            ) }}"
+        >
+            ◀️ Previous
+        </a>
+
+    {% endif %}
 
 
-<footer>
+    <span style="
+        margin:0 15px;
+    ">
 
-    <p>
-        © 2026 My Blog. All rights reserved.
-    </p>
+        Page
+        <strong>{{ page }}</strong>
+        of
+        <strong>{{ total_pages }}</strong>
 
-</footer>
+    </span>
 
-</body>
 
-</html>
+    {% if page < total_pages %}
+
+        <a
+            class="button"
+            href="{{ url_for(
+                'admin_comments',
+                page=page+1
+            ) }}"
+        >
+            Next ▶️
+        </a>
+
+    {% endif %}
+
+</div>
+
+{% endif %}
+
+<a
+    class="button"
+    href="{{ url_for('admin_dashboard') }}"
+>
+    ← Back to Dashboard
+</a>
+
+{% endblock %}
