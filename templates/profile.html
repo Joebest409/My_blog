@@ -1,157 +1,427 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
+{% block content %}
 
-    <meta charset="UTF-8">
+<style>
 
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
+.profile-container {
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 0 15px;
+}
 
-    <title>My Profile - My Blog</title>
+.profile-card {
+    background: white;
+    border-radius: 18px;
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 5px 25px rgba(0,0,0,0.08);
+    margin-bottom: 25px;
+}
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
+.profile-picture-wrapper {
+    margin-bottom: 15px;
+}
 
-</head>
+.profile-picture {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid #f0f0f0;
+}
 
-<body>
+.default-profile {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #eeeeee;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    color: #777;
+}
 
-<header class="site-header">
+.profile-name {
+    font-size: 28px;
+    margin: 10px 0 5px;
+}
 
-    <div class="header-container">
+.profile-email {
+    color: #777;
+    margin-bottom: 5px;
+}
 
-        <h1>My Blog</h1>
+.profile-date {
+    color: #999;
+    font-size: 14px;
+}
 
-        <nav>
+.profile-buttons {
+    margin-top: 20px;
+}
 
-            <a href="/">
-                Home
-            </a>
+.profile-buttons a {
+    display: inline-block;
+    text-decoration: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    margin: 5px;
+    background: #222;
+    color: white;
+}
 
-            <a href="/profile">
-                My Profile
-            </a>
+.profile-buttons a:hover {
+    opacity: 0.85;
+}
 
-            {% if session.get("is_admin") == 1 %}
+.stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
 
-                <a href="/admin">
-                    Admin Dashboard
-                </a>
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 14px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+}
 
-            {% endif %}
+.stat-number {
+    font-size: 25px;
+    font-weight: bold;
+    display: block;
+}
 
-            <a href="/logout">
-                Logout
-            </a>
+.stat-label {
+    color: #777;
+    font-size: 14px;
+}
 
-        </nav>
+.posts-section {
+    background: white;
+    padding: 25px;
+    border-radius: 16px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+}
 
-    </div>
+.posts-section h2 {
+    margin-top: 0;
+}
 
-</header>
+.post-card {
+    padding: 18px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.post-card:last-child {
+    border-bottom: none;
+}
+
+.post-card h3 {
+    margin: 0 0 8px;
+}
+
+.post-card h3 a {
+    text-decoration: none;
+    color: #222;
+}
+
+.post-card h3 a:hover {
+    text-decoration: underline;
+}
+
+.post-meta {
+    color: #888;
+    font-size: 14px;
+}
+
+.post-stats {
+    margin-top: 8px;
+    color: #666;
+    font-size: 14px;
+}
+
+.pagination {
+    text-align: center;
+    margin-top: 25px;
+}
+
+.pagination a {
+    display: inline-block;
+    padding: 8px 14px;
+    margin: 3px;
+    border-radius: 7px;
+    text-decoration: none;
+    background: #222;
+    color: white;
+}
+
+.pagination span {
+    margin: 0 10px;
+    font-weight: bold;
+}
+
+.empty-posts {
+    color: #777;
+    text-align: center;
+    padding: 30px;
+}
+
+@media (max-width: 600px) {
+
+    .profile-card {
+        padding: 20px;
+    }
+
+    .stats {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-name {
+        font-size: 24px;
+    }
+
+    .profile-picture,
+    .default-profile {
+        width: 100px;
+        height: 100px;
+    }
+
+}
+
+</style>
 
 
-<main class="container">
+<div class="profile-container">
 
-    <h2>
-        My Profile
-    </h2>
-
+    <!-- PROFILE CARD -->
 
     <div class="profile-card">
 
-        <h3>
-            {{ user["username"] }}
-        </h3>
+        <div class="profile-picture-wrapper">
 
-        <p>
+            {% if user.profile_picture %}
 
-            <strong>
-                Email:
-            </strong>
+                <img
+                    src="{{ url_for(
+                        'static',
+                        filename='profile_pictures/' + user.profile_picture
+                    ) }}"
+                    alt="Profile Picture"
+                    class="profile-picture"
+                >
 
-            {{ user["email"] }}
+            {% else %}
 
-        </p>
+                <div class="default-profile">
+                    👤
+                </div>
+
+            {% endif %}
+
+        </div>
 
 
-        <p>
+        <h1 class="profile-name">
+            {{ user.username }}
+        </h1>
 
-            <strong>
-                Member since:
-            </strong>
-            
-            
 
-            {{ user["created_at"] }}
+        <div class="profile-email">
+            {{ user.email }}
+        </div>
 
-        </p>
-        
-        <a href="/edit-profile">
-    ✏️ Edit Profile
-</a>
+
+        <div class="profile-date">
+            Joined {{ user.created_at }}
+        </div>
+
+
+        {% if session.get("username") == user.username %}
+
+        <div class="profile-buttons">
+
+            <a href="{{ url_for(
+                'edit_profile',
+                username=user.username
+            ) }}">
+                ✏️ Edit Profile
+            </a>
+
+            <a href="{{ url_for(
+                'change_user_password',
+                username=user.username
+            ) }}">
+                🔐 Change Password
+            </a>
+
+        </div>
+
+        {% endif %}
 
     </div>
 
 
-    <h2>
-        My Comments
-    </h2>
+    <!-- STATISTICS -->
+
+    <div class="stats">
+
+        <div class="stat-card">
+
+            <span class="stat-number">
+                {{ total_posts }}
+            </span>
+
+            <span class="stat-label">
+                📝 Posts
+            </span>
+
+        </div>
 
 
-    {% if comments %}
+        <div class="stat-card">
 
-        {% for comment in comments %}
+            <span class="stat-number">
+                {{ total_likes }}
+            </span>
 
-            <div class="comment">
+            <span class="stat-label">
+                ❤️ Likes
+            </span>
 
-                <h3>
+        </div>
 
-                    <a href="{{ url_for(
-                        'post',
-                        post_id=comment['post_id']
-                    ) }}">
 
-                        {{ comment["title"] }}
+        <div class="stat-card">
 
-                    </a>
+            <span class="stat-number">
+                {{ total_views }}
+            </span>
 
-                </h3>
+            <span class="stat-label">
+                👁️ Views
+            </span>
 
+        </div>
+
+    </div>
+
+
+    <!-- USER POSTS -->
+
+    <div class="posts-section">
+
+        <h2>
+            📝 {{ user.username }}'s Posts
+        </h2>
+
+
+        {% if posts %}
+
+            {% for post in posts %}
+
+                <div class="post-card">
+
+                    <h3>
+
+                        <a href="{{ url_for(
+                            'post',
+                            post_id=post.id
+                        ) }}">
+
+                            {{ post.title }}
+
+                        </a>
+
+                    </h3>
+
+
+                    <div class="post-meta">
+
+                        {{ post.category }}
+
+                        •
+                        
+                        {{ post.created_at }}
+
+                    </div>
+
+
+                    <div class="post-stats">
+
+                        ❤️ {{ post.likes or 0 }}
+
+                        &nbsp;&nbsp;
+
+                        👁️ {{ post.views or 0 }}
+
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+
+            <!-- PAGINATION -->
+
+            {% if total_pages > 1 %}
+
+                <div class="pagination">
+
+                    {% if page > 1 %}
+
+                        <a href="{{ url_for(
+                            'profile',
+                            username=user.username,
+                            page=page-1
+                        ) }}">
+                            ← Previous
+                        </a>
+
+                    {% endif %}
+
+
+                    <span>
+                        Page {{ page }} of {{ total_pages }}
+                    </span>
+
+
+                    {% if page < total_pages %}
+
+                        <a href="{{ url_for(
+                            'profile',
+                            username=user.username,
+                            page=page+1
+                        ) }}">
+                            Next →
+                        </a>
+
+                    {% endif %}
+
+                </div>
+
+            {% endif %}
+
+
+        {% else %}
+
+            <div class="empty-posts">
 
                 <p>
-                    {{ comment["content"] }}
+                    This user has not created any posts yet.
                 </p>
-
-
-                <small>
-                    {{ comment["created_at"] }}
-                </small>
 
             </div>
 
-        {% endfor %}
+        {% endif %}
 
-    {% else %}
+    </div>
 
-        <p>
-            You haven't commented on any posts yet.
-        </p>
+</div>
 
-    {% endif %}
-
-</main>
-
-
-<footer>
-
-    <p>
-        © 2026 My Blog. All rights reserved.
-    </p>
-
-</footer>
-
-</body>
-
-</html>
+{% endblock %}
